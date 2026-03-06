@@ -192,7 +192,7 @@ df = get_data(archivo_usuario)
 
 st.sidebar.divider()
 st.sidebar.markdown("**Parámetros de Emergencia**")
-umbral_er = st.sidebar.slider("Umbral Tasa Diaria (Para detectar pico)", 0.05, 0.80, 0.35)
+umbral_er = st.sidebar.slider("Umbral Tasa Diaria (Para detectar pico)", 0.05, 0.80, 0.15)
 
 st.sidebar.divider()
 st.sidebar.markdown("🌡️ **Fisiología Térmica (Bio-Limit)**")
@@ -236,7 +236,7 @@ if df is not None and modelo_ann is not None:
     df.loc[df["Prec_sum_15d"] < 25, "EMERREL"] = df["EMERREL"].clip(upper=0.14)
     
     # Restricción histórica: Anulamos emergencia antes de Marzo (Julian Day 59)
-    df.loc[df["Julian_days"] <= 59, "EMERREL"] = 0.0 
+    df.loc[df["Julian_days"] <= 25, "EMERREL"] = 0.0 
 
     # --- D. CÁLCULO BIO-TÉRMICO (TT) ---
     df["Tmedia"] = (df["TMAX"] + df["TMIN"]) / 2
