@@ -228,7 +228,7 @@ if df is not None and modelo_ann is not None:
     df["Prec_sum_21d"] = df["Prec"].rolling(window=21, min_periods=1).sum()
 
     # Factor hídrico sigmoide con valor medio en 60 mm
-    df["Hydric_Factor"] = 1 / (1 + np.exp(-0.4 * (df["Prec_sum_21d"] - 80)))
+    df["Hydric_Factor"] = 1 / (1 + np.exp(-0.4 * (df["Prec_sum_21d"] - 90)))
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
 
     # Relajación dinámica: si la lluvia acumulada supera 50 mm, se libera el bloqueo;
