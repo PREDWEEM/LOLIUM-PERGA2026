@@ -227,7 +227,7 @@ if df is not None and modelo_ann is not None:
     # Ventana móvil de 21 días
     df["Prec_sum_21d"] = df["Prec"].rolling(window=21, min_periods=1).sum()
 
-    # Factor hídrico sigmoide con valor medio en 60 mm
+    # Factor hídrico sigmoide con valor medio en 90 mm
     df["Hydric_Factor"] = 1 / (1 + np.exp(-0.4 * (df["Prec_sum_21d"] - 90)))
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
 
