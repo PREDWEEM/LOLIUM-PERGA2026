@@ -2,6 +2,7 @@
 # ===============================================================
 # 🌾 PREDWEEM INTEGRAL vK4.5 — LOLIUM PERGAMINO 2026
 # Actualización: Restricción Hídrica Sigmoide + Relajación Dinámica
+# NUEVO: Forzado de pico (EMERREL = 1.0) frente a lluvias >= 20 mm
 # ===============================================================
 
 import streamlit as st
@@ -235,6 +236,9 @@ if df is not None and modelo_ann is not None:
     # en caso contrario, se mantiene hasta JD 25
     jd_thresholds = np.where(df["Prec_sum_21d"] > 50, 0, 25)
     df.loc[df["Julian_days"] <= jd_thresholds, "EMERREL"] = 0.0
+
+    # 🌧️ NUEVA REGLA: Forzar pico de 1.0 frente a eventos puntuales de lluvia >= 20 mm
+    df.loc[df["Prec"] >= 20.0, "EMERREL"] = 1.0
 
     # --- D. CÁLCULO BIO-TÉRMICO (TT) ---
     df["Tmedia"] = (df["TMAX"] + df["TMIN"]) / 2
