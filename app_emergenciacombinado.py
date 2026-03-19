@@ -1,12 +1,10 @@
-
 # -*- coding: utf-8 -*-
 # ===============================================================
 # 🌾 PREDWEEM INTEGRAL vK4.9.7 — LOLIUM PERGAMINO 2026
 # Actualización:
 # - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura).
-# - NUEVO: Calibración dinámica de "Exigencia Hídrica" para lotes sin 
-#   emergencia temprana. Permite ajustar qué tan lleno debe estar el 
-#   perfil superficial (W_superficial) para destrabar la emergencia.
+# - ALTA EXIGENCIA HÍDRICA: Capacidad de campo por defecto en 30mm y 
+#   exigencia de retención en 90%. Corte estricto de emergencia (tolerancia 5%).
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
 # ===============================================================
@@ -24,7 +22,7 @@ from pathlib import Path
 # 1. CONFIGURACIÓN DE PÁGINA Y ESTILO
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="PREDWEEM PERGAMINO vK4.9.7",
+    page_title="PREDWEEM PERGAMINO vK4.9.7 (Alta Demanda)",
     layout="wide",
     page_icon="🌾"
 )
@@ -130,7 +128,7 @@ def calcular_et0_hargreaves(jday, tmax, tmin, latitud=-33.89):
     et0 = 0.0023 * ra_mm * (tmean + 17.8) * np.sqrt(trange)
     return np.maximum(et0, 0)
 
-def balance_hidrico_superficial(prec, et0, w_max=20.0, ke_suelo=0.4):
+def balance_hidrico_superficial(prec, et0, w_max=30.0, ke_suelo=0.4):
     n = len(prec)
     w = np.zeros(n)
     w[0] = w_max / 2.0 
@@ -181,16 +179,13 @@ def load_models():
         return None, None
 
 def load_data(file_uploader=None):
-    # 1. Prioridad: Archivo subido manualmente en el sidebar
     if file_uploader:
         return pd.read_excel(file_uploader) if file_uploader.name.endswith((".xlsx", ".xls")) else pd.read_csv(file_uploader)
     
-    # 2. Carga automática local
     ruta_local = BASE / "meteo_daily.csv"
     if ruta_local.exists():
         return pd.read_csv(ruta_local)
         
-    # 3. Carga automática remota (Backup GitHub - Ajustado para Pergamino)
     github_url = "https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/meteo_daily.csv"
     try:
         return pd.read_csv(github_url)
@@ -239,7 +234,8 @@ dga_critico = st.sidebar.number_input("Límite Ventana (°Cd)", value=800, step=
 
 st.sidebar.divider()
 st.sidebar.markdown("## 💧 3. Balance Hídrico (Suelo)")
-w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=20.0, step=1.0)
+# INCREMENTO DE DEFAULT: Ahora arranca en 30 mm para exigir más precipitación absoluta
+w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=30.0, step=1.0)
 
 st.sidebar.markdown("**Manejo del Lote (Cobertura)**")
 tipo_manejo = st.sidebar.selectbox(
@@ -264,15 +260,15 @@ else:
 
 st.sidebar.caption(f"Coeficiente Ke interno aplicado: **{ke_val:.2f}**")
 
-# NUEVO: Control para endurecer la emergencia frente a la falta de humedad
 st.sidebar.markdown("**Calibración de Exigencia Hídrica**")
+# INCREMENTO DE DEFAULT: Ahora exige un 90% de la capacidad de campo para destrabar emergencia
 exigencia_hidrica_pct = st.sidebar.slider(
     "Humedad Relativa Mínima (%)", 
     min_value=10, 
     max_value=100, 
-    value=75, 
+    value=90, 
     step=5,
-    help="Porcentaje de la caja de agua que debe estar lleno para que la maleza emerja. Subir este valor retrasa el pico en años secos."
+    help="Porcentaje de la caja de agua que debe estar lleno para que la maleza emerja. Un valor alto (ej. 90%) bloqueará cualquier alerta hasta que llueva fuerte."
 )
 exigencia_hidrica = exigencia_hidrica_pct / 100.0
 
@@ -285,7 +281,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df = df_meteo_raw.copy()
     df.columns = [c.upper().strip() for c in df.columns]
     
-    # Mapeo robusto de columnas
     mapeo = {'FECHA': 'Fecha', 'DATE': 'Fecha', 'TMAX': 'TMAX', 'TMIN': 'TMIN', 'PREC': 'Prec', 'LLUVIA': 'Prec'}
     df = df.rename(columns=mapeo)
 
@@ -299,23 +294,22 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["EMERREL"] = np.maximum(emerrel_raw, 0.0)
 
     # ---------------------------------------------------------
-    # MÓDULO HÍDRICO SUPERFICIAL (BHS PERGAMINO)
+    # MÓDULO HÍDRICO SUPERFICIAL ESTRICTO (BHS PERGAMINO)
     # ---------------------------------------------------------
     df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.89)
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
     
     humedad_relativa = df["W_superficial"] / w_max_val
     
-    # NUEVA LÓGICA DE CALIBRACIÓN HÍDRICA: 
-    # Sigmoide con pendiente más abrupta (-15 en lugar de -10) y centrada dinámicamente según el slider.
-    df["Hydric_Factor"] = 1 / (1 + np.exp(-15 * (humedad_relativa - exigencia_hidrica)))
+    # NUEVA LÓGICA DE CALIBRACIÓN HÍDRICA (MÁS AGREVISVA): 
+    # Sigmoide con pendiente muy abrupta (-20)
+    df["Hydric_Factor"] = 1 / (1 + np.exp(-20 * (humedad_relativa - exigencia_hidrica)))
     
     # Multiplicador final mecanístico
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
     
-    # CORTE ESTRICTO (Hard Threshold): Si la humedad está más de un 15% por debajo de la exigencia, cortamos a CERO absoluto
-    # Esto evita el "goteo" molesto de simulaciones residuales.
-    df.loc[humedad_relativa < (exigencia_hidrica - 0.15), "EMERREL"] = 0.0
+    # CORTE ESTRICTO REDUCIDO: Si la humedad está a penas un 5% por debajo de la exigencia, cortamos a CERO absoluto
+    df.loc[humedad_relativa < (exigencia_hidrica - 0.05), "EMERREL"] = 0.0
 
     # --- BIO-TÉRMICO Y VENTANA DE CONTROL ---
     df["Tmedia"] = (df["TMAX"] + df["TMIN"]) / 2
