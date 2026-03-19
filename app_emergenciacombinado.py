@@ -1,16 +1,14 @@
+
 # -*- coding: utf-8 -*-
 # ===============================================================
-# 🌾 PREDWEEM INTEGRAL vK4.9.6 — LOLIUM PERGAMINO 2026
+# 🌾 PREDWEEM INTEGRAL vK4.9.7 — LOLIUM PERGAMINO 2026
 # Actualización:
-# - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura):
-#   * ELIMINADA la restricción hídrica sigmoide empírica (centro 90 mm).
-#   * ELIMINADA la relajación dinámica empírica (Día Juliano 25).
-#   * ELIMINADO el forzado de pico empírico por lluvias intensas.
+# - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura).
+# - NUEVO: Calibración dinámica de "Exigencia Hídrica" para lotes sin 
+#   emergencia temprana. Permite ajustar qué tan lleno debe estar el 
+#   perfil superficial (W_superficial) para destrabar la emergencia.
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
-# - Selector dinámico de manejo de lote (Rastrojo/Labranza) para coeficiente Ke.
-# - Carga AUTOMÁTICA de datos climáticos desde 'meteo_daily.csv'.
-# - SIN MÓDULO DE VALIDACIÓN (Versión exclusiva para predicción operativa).
 # ===============================================================
 
 import streamlit as st
@@ -26,7 +24,7 @@ from pathlib import Path
 # 1. CONFIGURACIÓN DE PÁGINA Y ESTILO
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="PREDWEEM PERGAMINO vK4.9.6",
+    page_title="PREDWEEM PERGAMINO vK4.9.7",
     layout="wide",
     page_icon="🌾"
 )
@@ -266,6 +264,18 @@ else:
 
 st.sidebar.caption(f"Coeficiente Ke interno aplicado: **{ke_val:.2f}**")
 
+# NUEVO: Control para endurecer la emergencia frente a la falta de humedad
+st.sidebar.markdown("**Calibración de Exigencia Hídrica**")
+exigencia_hidrica_pct = st.sidebar.slider(
+    "Humedad Relativa Mínima (%)", 
+    min_value=10, 
+    max_value=100, 
+    value=75, 
+    step=5,
+    help="Porcentaje de la caja de agua que debe estar lleno para que la maleza emerja. Subir este valor retrasa el pico en años secos."
+)
+exigencia_hidrica = exigencia_hidrica_pct / 100.0
+
 # ---------------------------------------------------------
 # 5. MOTOR DE CÁLCULO
 # ---------------------------------------------------------
@@ -295,11 +305,17 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
     
     humedad_relativa = df["W_superficial"] / w_max_val
-    # Factor hídrico basado en la retención real de agua en el suelo
-    df["Hydric_Factor"] = 1 / (1 + np.exp(-10 * (humedad_relativa - 0.3)))
+    
+    # NUEVA LÓGICA DE CALIBRACIÓN HÍDRICA: 
+    # Sigmoide con pendiente más abrupta (-15 en lugar de -10) y centrada dinámicamente según el slider.
+    df["Hydric_Factor"] = 1 / (1 + np.exp(-15 * (humedad_relativa - exigencia_hidrica)))
     
     # Multiplicador final mecanístico
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
+    
+    # CORTE ESTRICTO (Hard Threshold): Si la humedad está más de un 15% por debajo de la exigencia, cortamos a CERO absoluto
+    # Esto evita el "goteo" molesto de simulaciones residuales.
+    df.loc[humedad_relativa < (exigencia_hidrica - 0.15), "EMERREL"] = 0.0
 
     # --- BIO-TÉRMICO Y VENTANA DE CONTROL ---
     df["Tmedia"] = (df["TMAX"] + df["TMIN"]) / 2
@@ -441,7 +457,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
                         f"requeridos para el control."
                     )
             else:
-                st.warning(f"⏳ Esperando primera alerta (Tasa diaria >= {umbral_er}).")
+                st.warning(f"⏳ Esperando primera alerta (Tasa diaria >= {umbral_er}). El perfil necesita recargarse al {exigencia_hidrica_pct}% para destrabar la emergencia.")
 
         with col_gauge:
             max_axis = dga_critico * 1.2
@@ -479,7 +495,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
 
     with tab2:
         st.header("💧 Dinámica Hídrica del Suelo (Balance Superficial)")
-        st.markdown("Visualización de las precipitaciones frente a la retención de agua en los primeros centímetros del suelo, considerando la evapotranspiración (ET0).")
+        st.markdown(f"Visualización de las precipitaciones frente a la retención de agua en los primeros centímetros del suelo. La emergencia actual requiere que el suelo alcance al menos un **{exigencia_hidrica_pct}%** de su capacidad ({w_max_val * exigencia_hidrica:.1f} mm) para dispararse.")
         
         fig_hidrico = go.Figure()
         
@@ -507,6 +523,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
             line_color="#334155",
             annotation_text=f"Capacidad Máx. ({w_max_val} mm)",
             annotation_position="top left"
+        )
+        
+        fig_hidrico.add_hline(
+            y=w_max_val * exigencia_hidrica,
+            line_dash="dash",
+            line_color="orange",
+            annotation_text=f"Punto Disparo Ecológico ({exigencia_hidrica_pct}%)",
+            annotation_position="bottom right"
         )
 
         fig_hidrico.update_layout(
@@ -585,14 +609,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Data_Diaria')
         pd.DataFrame({
-            'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke'],
-            'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val]
+            'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Exigencia_Hidrica_Pct'],
+            'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, exigencia_hidrica_pct]
         }).to_excel(writer, sheet_name='Bio_Params', index=False)
 
     st.sidebar.download_button(
         "📥 Descargar Reporte Completo",
         output.getvalue(),
-        "PREDWEEM_Prediccion_Pergamino_vK4_9_6_BHS.xlsx"
+        "PREDWEEM_Prediccion_Pergamino_vK4_9_7_BHS.xlsx"
     )
 
 else:
