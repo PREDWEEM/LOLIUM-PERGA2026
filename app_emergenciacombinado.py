@@ -235,7 +235,7 @@ dga_critico = st.sidebar.number_input("Límite Ventana (°Cd)", value=800, step=
 st.sidebar.divider()
 st.sidebar.markdown("## 💧 3. Balance Hídrico (Suelo)")
 # INCREMENTO DE DEFAULT: Ahora arranca en 30 mm para exigir más precipitación absoluta
-w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=30.0, step=1.0)
+w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=100.0, step=1.0)
 
 st.sidebar.markdown("**Manejo del Lote (Cobertura)**")
 tipo_manejo = st.sidebar.selectbox(
