@@ -212,7 +212,7 @@ else:
 
 st.sidebar.divider()
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
-umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.30)
+umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.50)
 residualidad = st.sidebar.number_input("Residualidad Herbicida (días)", 0, 60, 20)
 
 col_t1, col_t2 = st.sidebar.columns(2)
@@ -354,10 +354,8 @@ if df_meteo_raw is not None and modelo_ann is not None:
 
     colorscale_hard = [
         [0.0, "green"],
-        [0.14, "green"],
-        [0.15, "yellow"],
-        [0.34, "yellow"],
-        [0.35, "red"],
+        [0.49, "green"],
+        [0.50, "red"],
         [1.0, "red"]
     ]
 
