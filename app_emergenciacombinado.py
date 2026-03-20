@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 # ===============================================================
-# 🌾 PREDWEEM INTEGRAL vK4.9.7 — LOLIUM PERGAMINO 2026
+# 🌾 PREDWEEM OPERATIVO vK4.9.8 — LOLIUM PERGAMINO 2026
 # Actualización:
 # - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura).
+# - NUEVO: Escudo Termofisiológico Dinámico (Media Móvil 10d) para inhibición estival.
+# - NUEVO: Alerta visual de Estrés Térmico post-emergencia.
 # - ALTA EXIGENCIA HÍDRICA: Capacidad de campo por defecto en 100mm y 
 #   exigencia de retención en 90%. Corte estricto de emergencia (tolerancia 5%).
-# - NUEVO: Bypass de Ruptura de Dormición por Choque Hídrico Temprano.
+# - Bypass de Ruptura de Dormición por Choque Hídrico Temprano (Pulso 0.75).
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
+# - SIN MÓDULO DE VALIDACIÓN (Versión exclusiva para predicción operativa).
 # ===============================================================
 
 import streamlit as st
@@ -23,7 +26,7 @@ from pathlib import Path
 # 1. CONFIGURACIÓN DE PÁGINA Y ESTILO
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="PREDWEEM PERGAMINO vK4.9.7 (Alta Demanda)",
+    page_title="PREDWEEM PERGAMINO vK4.9.8 (Operativo)",
     layout="wide",
     page_icon="🌾"
 )
@@ -216,6 +219,13 @@ st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 # Umbral 0.50 para Pergamino (Mayor exigencia base)
 umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.50)
 
+st.sidebar.markdown("**Ruptura de Dormición Estival (Escudo)**")
+umbral_termoinhibicion = st.sidebar.number_input(
+    "Umbral Termoinhibición (°C)", 
+    min_value=15.0, max_value=35.0, value=24.0, step=0.5,
+    help="Si la T° Media móvil de los últimos 10 días supera este valor, la emergencia se bloquea a 0%."
+)
+
 st.sidebar.markdown("**Ruptura de Dormición (Otoño Temprano)**")
 umbral_choque_hidrico = st.sidebar.slider(
     "Choque Hídrico 3 días (mm)", 
@@ -308,7 +318,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
     
     mask_ruptura = (df["Julian_days"] <= limite_juliano_temprano) & (df["Prec_3d"] >= umbral_choque_hidrico)
-    # Impulso forzado para asegurar ruptura
+    # Impulso forzado para asegurar ruptura (0.75 en Pergamino)
     df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75) 
 
     # ---------------------------------------------------------
@@ -329,8 +339,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # CORTE ESTRICTO REDUCIDO: Si la humedad está apenas un 5% por debajo de la exigencia, cortamos a CERO absoluto
     df.loc[humedad_relativa < (exigencia_hidrica - 0.05), "EMERREL"] = 0.0
 
-    # --- BIO-TÉRMICO Y VENTANA DE CONTROL ---
+    # --- ESCUDO TERMOFISIOLÓGICO Y CÁLCULO TÉRMICO ---
     df["Tmedia"] = (df["TMAX"] + df["TMIN"]) / 2
+
+    # Escudo Termoinhibición
+    df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
+    mask_inhibicion = df["Tmedia_10d"] >= umbral_termoinhibicion
+    df.loc[mask_inhibicion, "EMERREL"] = 0.0
+
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
 
     fecha_hoy = pd.Timestamp.now().normalize()
@@ -342,6 +358,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     dga_hoy, dga_7dias = 0.0, 0.0
     fecha_inicio_ventana, fecha_control = None, None
     msg_estado = "Esperando pico de emergencia..."
+    dias_stress = 0
 
     if indices_pulso:
         fecha_inicio_ventana = df.loc[indices_pulso[0], "Fecha"]
@@ -364,6 +381,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
             dga_7dias = dga_hoy
 
         msg_estado = f"Pico detectado el {fecha_inicio_ventana.strftime('%d/%m')}"
+        dias_stress = len(df_desde_pico[df_desde_pico["Tmedia"] > t_opt_max])
 
     # -----------------------------------------------------
     # VISUALIZACIÓN FRONT-END
@@ -457,6 +475,9 @@ if df_meteo_raw is not None and modelo_ann is not None:
                     f"📅 **Inicio de Conteo Térmico:** {fecha_inicio_ventana.strftime('%d-%m-%Y')} "
                     f"(Primer pico detectado)"
                 )
+                if dias_stress > 0:
+                    st.markdown(f"""<div class="bio-alert">🔥 <b>Estrés Térmico:</b> {dias_stress} días con T > {t_opt_max}°C desde el inicio.</div>""", unsafe_allow_html=True)
+                
                 if fecha_control:
                     st.error(
                         f"🎯 **MOMENTO CRÍTICO DE CONTROL:** {fecha_control.strftime('%d-%m-%Y')}. "
@@ -620,14 +641,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Data_Diaria')
         pd.DataFrame({
-            'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Exigencia_Hidrica_Pct'],
-            'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, exigencia_hidrica_pct]
+            'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Exigencia_Hidrica_Pct', 'Umbral_Termoinhibicion'],
+            'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, exigencia_hidrica_pct, umbral_termoinhibicion]
         }).to_excel(writer, sheet_name='Bio_Params', index=False)
 
     st.sidebar.download_button(
         "📥 Descargar Reporte Completo",
         output.getvalue(),
-        "PREDWEEM_Prediccion_Pergamino_vK4_9_7_BHS.xlsx"
+        "PREDWEEM_Operativo_Pergamino_vK4_9_8_BHS.xlsx"
     )
 
 else:
