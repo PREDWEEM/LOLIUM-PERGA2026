@@ -3,8 +3,9 @@
 # 🌾 PREDWEEM INTEGRAL vK4.9.7 — LOLIUM PERGAMINO 2026
 # Actualización:
 # - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura).
-# - ALTA EXIGENCIA HÍDRICA: Capacidad de campo por defecto en 30mm y 
+# - ALTA EXIGENCIA HÍDRICA: Capacidad de campo por defecto en 100mm y 
 #   exigencia de retención en 90%. Corte estricto de emergencia (tolerancia 5%).
+# - NUEVO: Bypass de Ruptura de Dormición por Choque Hídrico Temprano.
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
 # ===============================================================
@@ -106,8 +107,7 @@ def calculate_tt_scalar(t, t_base, t_opt, t_crit):
     elif t <= t_opt:
         return t - t_base
     elif t < t_crit:
-        factor = (t_crit - t) / (t_crit - t_opt)
-        return (t - t_base) * factor
+        return (t - t_base) * ((t_crit - t) / (t_crit - t_opt))
     else:
         return 0.0
 
@@ -212,7 +212,17 @@ else:
 
 st.sidebar.divider()
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
+
+# Umbral 0.50 para Pergamino (Mayor exigencia base)
 umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.50)
+
+st.sidebar.markdown("**Ruptura de Dormición (Otoño Temprano)**")
+umbral_choque_hidrico = st.sidebar.slider(
+    "Choque Hídrico 3 días (mm)", 
+    min_value=20.0, max_value=100.0, value=45.0, 
+    help="Desbloquea la emergencia temprana si se acumula esta lluvia antes de fines de abril."
+)
+
 residualidad = st.sidebar.number_input("Residualidad Herbicida (días)", 0, 60, 20)
 
 col_t1, col_t2 = st.sidebar.columns(2)
@@ -234,7 +244,7 @@ dga_critico = st.sidebar.number_input("Límite Ventana (°Cd)", value=800, step=
 
 st.sidebar.divider()
 st.sidebar.markdown("## 💧 3. Balance Hídrico (Suelo)")
-# INCREMENTO DE DEFAULT: Ahora arranca en 30 mm para exigir más precipitación absoluta
+# INCREMENTO DE DEFAULT: Arranca en 100 mm para exigir más precipitación absoluta
 w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=100.0, step=1.0)
 
 st.sidebar.markdown("**Manejo del Lote (Cobertura)**")
@@ -261,7 +271,7 @@ else:
 st.sidebar.caption(f"Coeficiente Ke interno aplicado: **{ke_val:.2f}**")
 
 st.sidebar.markdown("**Calibración de Exigencia Hídrica**")
-# INCREMENTO DE DEFAULT: Ahora exige un 90% de la capacidad de campo para destrabar emergencia
+# INCREMENTO DE DEFAULT: Exige un 90% de la capacidad de campo para destrabar emergencia
 exigencia_hidrica_pct = st.sidebar.slider(
     "Humedad Relativa Mínima (%)", 
     min_value=10, 
@@ -293,6 +303,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
     emerrel_raw, _ = modelo_ann.predict(X)
     df["EMERREL"] = np.maximum(emerrel_raw, 0.0)
 
+    # --- BYPASS AGRONÓMICO: RUPTURA DE DORMICIÓN TEMPRANA ---
+    limite_juliano_temprano = 110 # Aprox. 20 de Abril
+    df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
+    
+    mask_ruptura = (df["Julian_days"] <= limite_juliano_temprano) & (df["Prec_3d"] >= umbral_choque_hidrico)
+    # Impulso forzado para asegurar ruptura
+    df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75) 
+
     # ---------------------------------------------------------
     # MÓDULO HÍDRICO SUPERFICIAL ESTRICTO (BHS PERGAMINO)
     # ---------------------------------------------------------
@@ -308,7 +326,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # Multiplicador final mecanístico
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
     
-    # CORTE ESTRICTO REDUCIDO: Si la humedad está a penas un 5% por debajo de la exigencia, cortamos a CERO absoluto
+    # CORTE ESTRICTO REDUCIDO: Si la humedad está apenas un 5% por debajo de la exigencia, cortamos a CERO absoluto
     df.loc[humedad_relativa < (exigencia_hidrica - 0.05), "EMERREL"] = 0.0
 
     # --- BIO-TÉRMICO Y VENTANA DE CONTROL ---
@@ -352,6 +370,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # -----------------------------------------------------
     st.title("🌾 PREDWEEM LOLIUM - PERGAMINO 2026")
 
+    # Escala ajustada para visibilidad con umbral alto
     colorscale_hard = [
         [0.0, "green"],
         [0.49, "green"],
