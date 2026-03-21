@@ -217,7 +217,7 @@ st.sidebar.divider()
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 
 # Umbral 0.50 para Pergamino (Mayor exigencia base)
-umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.0)
+umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.30)
 
 st.sidebar.markdown("**Ruptura de Dormición Estival (Escudo)**")
 umbral_termoinhibicion = st.sidebar.number_input(
@@ -255,7 +255,7 @@ dga_critico = st.sidebar.number_input("Límite Ventana (°Cd)", value=800, step=
 st.sidebar.divider()
 st.sidebar.markdown("## 💧 3. Balance Hídrico (Suelo)")
 # INCREMENTO DE DEFAULT: Arranca en 100 mm para exigir más precipitación absoluta
-w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=100.0, step=1.0)
+w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=20.0, step=1.0)
 
 st.sidebar.markdown("**Manejo del Lote (Cobertura)**")
 tipo_manejo = st.sidebar.selectbox(
