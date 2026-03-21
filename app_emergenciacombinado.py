@@ -391,8 +391,8 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # Escala ajustada para visibilidad con umbral alto
     colorscale_hard = [
         [0.0, "green"],
-        [0.49, "green"],
-        [0.50, "red"],
+        [0.29, "green"],
+        [0.30, "red"],
         [1.0, "red"]
     ]
 
