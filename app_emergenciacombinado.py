@@ -5,8 +5,10 @@
 # - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura).
 # - NUEVO: Escudo Termofisiológico Dinámico (Media Móvil 10d) para inhibición estival.
 # - NUEVO: Alerta visual de Estrés Térmico post-emergencia.
-# - ALTA EXIGENCIA HÍDRICA: Capacidad de campo por defecto en 100mm y 
-#   exigencia de retención en 90%. Corte estricto de emergencia (tolerancia 5%).
+# - NUEVO: Corte Hídrico Estricto (20% HR) acoplado a la sigmoide.
+# - ELIMINADO: Exigencia hídrica de 100mm. Se restaura a Cap. de Campo estándar (ej. 20mm).
+# - NUEVO: Secado exponencial del suelo (Ke Dinámico / Factor Kr) en BHS.
+# - NUEVO: Bloqueo de emergencia (0%) hasta que una LLUVIA PUNTUAL supere la Cap. de Campo.
 # - Bypass de Ruptura de Dormición por Choque Hídrico Temprano (Pulso 0.75).
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
@@ -131,13 +133,15 @@ def calcular_et0_hargreaves(jday, tmax, tmin, latitud=-33.89):
     et0 = 0.0023 * ra_mm * (tmean + 17.8) * np.sqrt(trange)
     return np.maximum(et0, 0)
 
-def balance_hidrico_superficial(prec, et0, w_max=30.0, ke_suelo=0.4):
+def balance_hidrico_superficial(prec, et0, w_max=20.0, ke_suelo_max=0.4):
     n = len(prec)
     w = np.zeros(n)
     w[0] = w_max / 2.0 
     
     for i in range(1, n):
-        evaporacion_real = et0[i] * ke_suelo
+        kr = w[i-1] / w_max 
+        ke_dinamico = ke_suelo_max * kr
+        evaporacion_real = et0[i] * ke_dinamico
         w[i] = w[i-1] + prec[i] - evaporacion_real
         w[i] = max(0.0, min(w_max, w[i]))
         
@@ -216,7 +220,6 @@ else:
 st.sidebar.divider()
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 
-# Umbral 0.50 para Pergamino (Mayor exigencia base)
 umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.30)
 
 st.sidebar.markdown("**Ruptura de Dormición Estival (Escudo)**")
@@ -254,7 +257,6 @@ dga_critico = st.sidebar.number_input("Límite Ventana (°Cd)", value=800, step=
 
 st.sidebar.divider()
 st.sidebar.markdown("## 💧 3. Balance Hídrico (Suelo)")
-# INCREMENTO DE DEFAULT: Arranca en 100 mm para exigir más precipitación absoluta
 w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=20.0, step=1.0)
 
 st.sidebar.markdown("**Manejo del Lote (Cobertura)**")
@@ -279,18 +281,6 @@ else:
     ke_val = 0.40
 
 st.sidebar.caption(f"Coeficiente Ke interno aplicado: **{ke_val:.2f}**")
-
-st.sidebar.markdown("**Calibración de Exigencia Hídrica**")
-# INCREMENTO DE DEFAULT: Exige un 90% de la capacidad de campo para destrabar emergencia
-exigencia_hidrica_pct = st.sidebar.slider(
-    "Humedad Relativa Mínima (%)", 
-    min_value=10, 
-    max_value=100, 
-    value=90, 
-    step=5,
-    help="Porcentaje de la caja de agua que debe estar lleno para que la maleza emerja. Un valor alto (ej. 90%) bloqueará cualquier alerta hasta que llueva fuerte."
-)
-exigencia_hidrica = exigencia_hidrica_pct / 100.0
 
 # ---------------------------------------------------------
 # 5. MOTOR DE CÁLCULO
@@ -322,22 +312,25 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75) 
 
     # ---------------------------------------------------------
-    # MÓDULO HÍDRICO SUPERFICIAL ESTRICTO (BHS PERGAMINO)
+    # MÓDULO HÍDRICO SUPERFICIAL (BHS PERGAMINO)
     # ---------------------------------------------------------
     df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.89)
-    df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
+    df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo_max=ke_val)
     
     humedad_relativa = df["W_superficial"] / w_max_val
     
-    # NUEVA LÓGICA DE CALIBRACIÓN HÍDRICA (MÁS AGREVISVA): 
-    # Sigmoide con pendiente muy abrupta (-20)
-    df["Hydric_Factor"] = 1 / (1 + np.exp(-20 * (humedad_relativa - exigencia_hidrica)))
+    df["Hydric_Factor"] = 1 / (1 + np.exp(-10 * (humedad_relativa - 0.3)))
     
     # Multiplicador final mecanístico
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
     
-    # CORTE ESTRICTO REDUCIDO: Si la humedad está apenas un 5% por debajo de la exigencia, cortamos a CERO absoluto
-    df.loc[humedad_relativa < (exigencia_hidrica - 0.05), "EMERREL"] = 0.0
+    # 1. CORTE HÍDRICO ESTRICTO DIARIO
+    df.loc[humedad_relativa < 0.20, "EMERREL"] = 0.0
+
+    # 2. TRIGGER DE RECARGA INICIAL (Lluvia puntual)
+    # Se bloquea la emergencia a 0% hasta que un solo evento de lluvia alcance la Capacidad de Campo configurada.
+    df['Lluvia_Recarga'] = (df['Prec'] >= w_max_val).cummax()
+    df.loc[~df['Lluvia_Recarga'], "EMERREL"] = 0.0
 
     # --- ESCUDO TERMOFISIOLÓGICO Y CÁLCULO TÉRMICO ---
     df["Tmedia"] = (df["TMAX"] + df["TMIN"]) / 2
@@ -489,7 +482,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
                         f"requeridos para el control."
                     )
             else:
-                st.warning(f"⏳ Esperando primera alerta (Tasa diaria >= {umbral_er}). El perfil necesita recargarse al {exigencia_hidrica_pct}% para destrabar la emergencia.")
+                st.warning(f"⏳ Esperando primera alerta (Tasa diaria >= {umbral_er}). El perfil necesita recargarse hasta alcanzar la Capacidad de Campo ({w_max_val} mm) en un solo evento para destrabar la emergencia.")
 
         with col_gauge:
             max_axis = dga_critico * 1.2
@@ -527,7 +520,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
 
     with tab2:
         st.header("💧 Dinámica Hídrica del Suelo (Balance Superficial)")
-        st.markdown(f"Visualización de las precipitaciones frente a la retención de agua en los primeros centímetros del suelo. La emergencia actual requiere que el suelo alcance al menos un **{exigencia_hidrica_pct}%** de su capacidad ({w_max_val * exigencia_hidrica:.1f} mm) para dispararse.")
+        st.markdown(f"Visualización de las precipitaciones frente a la retención de agua en los primeros centímetros del suelo. La emergencia requiere que el suelo alcance su capacidad de campo ({w_max_val} mm) en un solo evento de lluvia para dispararse por primera vez.")
         
         fig_hidrico = go.Figure()
         
@@ -555,14 +548,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
             line_color="#334155",
             annotation_text=f"Capacidad Máx. ({w_max_val} mm)",
             annotation_position="top left"
-        )
-        
-        fig_hidrico.add_hline(
-            y=w_max_val * exigencia_hidrica,
-            line_dash="dash",
-            line_color="orange",
-            annotation_text=f"Punto Disparo Ecológico ({exigencia_hidrica_pct}%)",
-            annotation_position="bottom right"
         )
 
         fig_hidrico.update_layout(
@@ -641,14 +626,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Data_Diaria')
         pd.DataFrame({
-            'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Exigencia_Hidrica_Pct', 'Umbral_Termoinhibicion'],
-            'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, exigencia_hidrica_pct, umbral_termoinhibicion]
+            'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Umbral_Termoinhibicion'],
+            'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, umbral_termoinhibicion]
         }).to_excel(writer, sheet_name='Bio_Params', index=False)
 
     st.sidebar.download_button(
         "📥 Descargar Reporte Completo",
         output.getvalue(),
-        "PREDWEEM_Operativo_Pergamino_vK4_9_8_BHS.xlsx"
+        "PREDWEEM_Operativo_Pergamino_vK4_9_8_Unificado.xlsx"
     )
 
 else:
