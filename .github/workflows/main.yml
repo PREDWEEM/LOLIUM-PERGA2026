@@ -3,21 +3,21 @@ name: Actualizacion Diaria Clima Pergamino
 on:
   schedule:
     - cron: '0 11 * * *' # 11:00 UTC es 08:00 AM en Argentina
-  workflow_dispatch: # Permite ejecutarlo manualmente
+  workflow_dispatch:
 
-env:
-  # Forzamos el uso de Node.js 24 como recomienda el aviso
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+# ESTO SOLUCIONA EL ERROR 128 DE PERMISOS
+permissions:
+  contents: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repositorio
-        uses: actions/checkout@v4 # Actualizado de v3 a v4
+        uses: actions/checkout@v4
 
       - name: Configurar Python
-        uses: actions/setup-python@v5 # Actualizado de v4 a v5
+        uses: actions/setup-python@v5
         with:
           python-version: '3.9'
 
@@ -30,8 +30,15 @@ jobs:
 
       - name: Subir cambios al repo
         run: |
-          git config --global user.name 'GitHub Action'
-          git config --global user.email 'action@github.com'
+          # Usamos el bot oficial de GitHub Actions
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add pergamino_pronostico.csv
-          git commit -m "Actualización automática clima Pergamino" || exit 0
-          git push
+          
+          # ESTO EVITA EL ERROR 128 CUANDO NO HAY CAMBIOS EN EL CLIMA
+          if git diff --staged --quiet; then
+            echo "No hay datos nuevos para actualizar hoy. Saltando commit."
+          else
+            git commit -m "Actualización automática clima Pergamino"
+            git push
+          fi
