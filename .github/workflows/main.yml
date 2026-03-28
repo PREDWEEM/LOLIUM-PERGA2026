@@ -1,1 +1,33 @@
+name: Actualizacion Diaria Clima Pergamino
 
+on:
+  schedule:
+    - cron: '0 11 * * *' # 11:00 UTC es 08:00 AM en Argentina
+  workflow_dispatch: # Permite ejecutarlo manualmente si quieres
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repositorio
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Instalar dependencias
+        run: |
+          pip install requests pandas
+
+      - name: Ejecutar script de clima
+        run: python actualizar_clima.py
+
+      - name: Subir cambios al repo
+        run: |
+          git config --global user.name 'GitHub Action'
+          git config --global user.email 'action@github.com'
+          git add pergamino_pronostico.csv
+          git commit -m "Actualización automática clima Pergamino" || exit 0
+          git push
