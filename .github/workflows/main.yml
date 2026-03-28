@@ -2,10 +2,10 @@ name: Actualizacion Diaria Clima Pergamino
 
 on:
   schedule:
-    - cron: '0 11 * * *' # 11:00 UTC es 08:00 AM en Argentina
-  workflow_dispatch:
+    - cron: '0 11 * * *' # Se ejecuta a las 11:00 UTC (08:00 AM en Argentina)
+  workflow_dispatch: # Permite ejecutar el script manualmente desde GitHub
 
-# ESTO SOLUCIONA EL ERROR 128 DE PERMISOS
+# Permisos necesarios para que el bot pueda guardar el archivo en tu repositorio
 permissions:
   contents: write
 
@@ -30,15 +30,17 @@ jobs:
 
       - name: Subir cambios al repo
         run: |
-          # Usamos el bot oficial de GitHub Actions
+          # Configuramos el bot oficial de GitHub Actions
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add pergamino_pronostico.csv
           
-          # ESTO EVITA EL ERROR 128 CUANDO NO HAY CAMBIOS EN EL CLIMA
+          # Agregamos el archivo histórico modificado
+          git add meteo_daily.csv
+          
+          # Verificamos si hubo cambios reales para evitar errores (Exit code 128)
           if git diff --staged --quiet; then
             echo "No hay datos nuevos para actualizar hoy. Saltando commit."
           else
-            git commit -m "Actualización automática clima Pergamino"
+            git commit -m "Actualización diaria: pronóstico agregado a meteo_daily.csv"
             git push
           fi
