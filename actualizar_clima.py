@@ -1,13 +1,14 @@
 import requests
 import pandas as pd
 import sys
+import os
 
 # Coordenadas de Pergamino
 LAT = -33.8895
 LON = -60.5736
+ARCHIVO_CSV = 'meteo_daily.csv'
 
-def obtener_pronostico():
-    # Usamos el modelo seamless (por defecto) que une ECMWF + locales para evitar vacíos
+def actualizar_pronostico():
     url = "https://api.open-meteo.com/v1/forecast"
     params = {
         "latitude": LAT,
@@ -26,27 +27,45 @@ def obtener_pronostico():
         
     data = response.json()
     
-    # Crear DataFrame
-    df = pd.DataFrame({
+    # DataFrame con los nuevos 7 días
+    df_nuevo = pd.DataFrame({
         'Fecha': data['daily']['time'],
         'TMAX': data['daily']['temperature_2m_max'],
         'TMIN': data['daily']['temperature_2m_min'],
         'Prec': data['daily']['precipitation_sum']
     })
     
-    # --- FILTRO DE SEGURIDAD ---
-    # Comprobamos si hay algún valor nulo/vacío en los datos descargados
-    if df.isnull().values.any():
+    if df_nuevo.isnull().values.any():
         print("ERROR: La API devolvió datos incompletos o vacíos.")
-        print(df)
-        # Salimos con error (exit 1) para que GitHub Actions aborte el proceso
-        # y NO sobreescriba tu archivo actual con datos en blanco.
         sys.exit(1)
-    
-    # Si todo está bien, guardamos el archivo
-    df.to_csv('pergamino_pronostico.csv', index=False)
-    print("Archivo 'pergamino_pronostico.csv' actualizado exitosamente con estos datos:")
-    print(df)
+
+    # Lógica para integrar con el historial
+    if os.path.exists(ARCHIVO_CSV):
+        print(f"Leyendo historial desde {ARCHIVO_CSV}...")
+        df_historico = pd.read_csv(ARCHIVO_CSV)
+        
+        # Opcional: Si quieres forzar una limpieza estricta de cualquier dato basura 
+        # que haya quedado del 27/03 en adelante antes de pegar el nuevo pronóstico,
+        # descomenta la siguiente línea:
+        # df_historico = df_historico[df_historico['Fecha'] < '2026-03-27']
+
+        # Combinamos el historial con los datos nuevos
+        df_final = pd.concat([df_historico, df_nuevo], ignore_index=True)
+        
+        # Eliminamos duplicados basados en la 'Fecha', conservando el 'last' (el pronóstico más reciente)
+        # Esto asegura que el pasado queda intacto, pero los días futuros se actualizan
+        df_final = df_final.drop_duplicates(subset=['Fecha'], keep='last')
+        
+        # Ordenamos cronológicamente por las dudas
+        df_final = df_final.sort_values(by='Fecha').reset_index(drop=True)
+    else:
+        print(f"No se encontró {ARCHIVO_CSV}, creando uno nuevo...")
+        df_final = df_nuevo
+
+    # Guardar el archivo definitivo
+    df_final.to_csv(ARCHIVO_CSV, index=False)
+    print("Archivo actualizado exitosamente. Últimos 10 registros:")
+    print(df_final.tail(10))
 
 if __name__ == "__main__":
-    obtener_pronostico()
+    actualizar_pronostico()
