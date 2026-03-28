@@ -3,17 +3,21 @@ name: Actualizacion Diaria Clima Pergamino
 on:
   schedule:
     - cron: '0 11 * * *' # 11:00 UTC es 08:00 AM en Argentina
-  workflow_dispatch: # Permite ejecutarlo manualmente si quieres
+  workflow_dispatch: # Permite ejecutarlo manualmente
+
+env:
+  # Forzamos el uso de Node.js 24 como recomienda el aviso
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repositorio
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4 # Actualizado de v3 a v4
 
       - name: Configurar Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # Actualizado de v4 a v5
         with:
           python-version: '3.9'
 
