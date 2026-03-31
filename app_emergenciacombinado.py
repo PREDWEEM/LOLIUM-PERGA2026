@@ -11,7 +11,7 @@
 # - NUEVO: Bloqueo de emergencia (0%) hasta que una LLUVIA PUNTUAL supere la Cap. de Campo.
 # - Bypass de Ruptura de Dormición por Choque Hídrico Temprano (Pulso 0.75).
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
-# - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
+# - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.94).
 # - MEJORA: Sensibilidad térmica e hídrica agresiva según nivel de rastrojo.
 # - OPTIMIZACIÓN: Vectorización matricial pura en PracticalANNModel.predict.
 # - SIN MÓDULO DE VALIDACIÓN (Versión exclusiva para predicción operativa).
@@ -326,7 +326,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # ---------------------------------------------------------
     # MÓDULO HÍDRICO SUPERFICIAL (BHS PERGAMINO)
     # ---------------------------------------------------------
-    df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.89)
+    df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.94)
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo_max=ke_val)
     
     humedad_relativa = df["W_superficial"] / w_max_val
