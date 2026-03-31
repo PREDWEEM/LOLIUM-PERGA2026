@@ -4,8 +4,8 @@ import sys
 import os
 
 # Coordenadas de Pergamino
-LAT = -33.8895
-LON = -60.5736
+LAT = -33.9443
+LON = -60.5745
 ARCHIVO_CSV = 'meteo_daily.csv'
 
 def actualizar_pronostico():
