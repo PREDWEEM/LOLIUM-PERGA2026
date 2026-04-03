@@ -2,6 +2,7 @@
 # ===============================================================
 # 🌾 PREDWEEM OPERATIVO vK4.9.8 — LOLIUM PERGAMINO 2026
 # Actualización:
+# - UI: "Datos del Lote" movido a st.expander en la página principal.
 # - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura).
 # - NUEVO: Escudo Termofisiológico Dinámico (Media Móvil 10d) para inhibición estival.
 # - NUEVO: Alerta visual de Estrés Térmico post-emergencia.
@@ -203,20 +204,56 @@ def load_data(file_uploader=None):
 # ---------------------------------------------------------
 modelo_ann, cluster_model = load_models()
 
+# --- HEADER PRINCIPAL ---
+st.title("🌾 PREDWEEM LOLIUM - PERGAMINO 2026")
+
+# --- MENÚ DESPLEGABLE: DATOS DEL LOTE (MAIN PAGE) ---
+with st.expander("📂 1. Datos del Lote", expanded=True):
+    col_upload, col_rastrojo = st.columns(2)
+    
+    with col_upload:
+        archivo_meteo = st.file_uploader("Subir Clima Manual (Opcional)", type=["xlsx", "csv"], help="Si no subes nada, el sistema leerá automáticamente meteo_daily.csv")
+        df_meteo_raw = load_data(archivo_meteo)
+        if df_meteo_raw is not None:
+            st.success("✅ Datos climáticos cargados.")
+        else:
+            st.error("❌ No se encontró 'meteo_daily.csv' ni se subió ningún archivo.")
+            
+    with col_rastrojo:
+        tipo_manejo = st.selectbox(
+            "Nivel de Rastrojo",
+            options=[
+                "Cobertura Muy Densa (SD - Extra Rastrojo/CS)",
+                "Alta Cobertura (SD - Rastrojo Trigo/Maíz)",
+                "Cobertura Media (SD - Rastrojo Soja)",
+                "Baja Cobertura / Labranza Convencional"
+            ],
+            index=1 
+        )
+        
+        # Lógica de cobertura ampliada
+        if "Muy Densa" in tipo_manejo:
+            ke_val = 0.10      
+            mod_termico = 0.80 
+        elif "Alta" in tipo_manejo:
+            ke_val = 0.25      
+            mod_termico = 0.90 
+        elif "Media" in tipo_manejo:
+            ke_val = 0.50      
+            mod_termico = 0.95 
+        else:
+            ke_val = 0.95      
+            mod_termico = 1.00 
+            
+        st.caption(f"Coeficiente Ke interno aplicado: **{ke_val:.2f}** | Modulador Térmico Suelo: **{mod_termico:.2f}**")
+
+
+# --- SIDEBAR ---
 st.sidebar.image(
     "https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/logo.png",
     use_container_width=True
 )
-st.sidebar.markdown("## 📂 1. Datos del Lote")
-archivo_meteo = st.sidebar.file_uploader("Subir Clima Manual (Opcional)", type=["xlsx", "csv"], help="Si no subes nada, el sistema leerá automáticamente meteo_daily.csv")
-df_meteo_raw = load_data(archivo_meteo)
 
-if df_meteo_raw is not None:
-    st.sidebar.success("✅ Datos climáticos cargados.")
-else:
-    st.sidebar.error("❌ No se encontró 'meteo_daily.csv' ni se subió ningún archivo.")
-
-st.sidebar.divider()
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 
 umbral_er = st.sidebar.slider("Umbral Alerta Temprana", 0.05, 0.80, 0.30)
@@ -258,34 +295,6 @@ st.sidebar.divider()
 st.sidebar.markdown("## 💧 3. Balance Hídrico (Suelo)")
 w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=30.0, step=1.0)
 
-st.sidebar.markdown("**Manejo del Lote (Cobertura)**")
-tipo_manejo = st.sidebar.selectbox(
-    "Nivel de Rastrojo",
-    options=[
-        "Cobertura Muy Densa (SD - Extra Rastrojo/CS)",
-        "Alta Cobertura (SD - Rastrojo Trigo/Maíz)",
-        "Cobertura Media (SD - Rastrojo Soja)",
-        "Baja Cobertura / Labranza Convencional"
-    ],
-    index=1 
-)
-
-# Lógica de cobertura ampliada
-if "Muy Densa" in tipo_manejo:
-    ke_val = 0.10      
-    mod_termico = 0.80 
-elif "Alta" in tipo_manejo:
-    ke_val = 0.25      
-    mod_termico = 0.90 
-elif "Media" in tipo_manejo:
-    ke_val = 0.50      
-    mod_termico = 0.95 
-else:
-    ke_val = 0.95      
-    mod_termico = 1.00 
-
-st.sidebar.caption(f"Coeficiente Ke interno aplicado: **{ke_val:.2f}**")
-st.sidebar.caption(f"Modulador Térmico Suelo: **{mod_termico:.2f}**")
 
 # ---------------------------------------------------------
 # 5. MOTOR DE CÁLCULO
@@ -391,8 +400,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # -----------------------------------------------------
     # VISUALIZACIÓN FRONT-END
     # -----------------------------------------------------
-    st.title("🌾 PREDWEEM LOLIUM - PERGAMINO 2026")
-
     # Escala ajustada para visibilidad con umbral alto
     colorscale_hard = [
         [0.0, "green"],
