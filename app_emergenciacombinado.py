@@ -235,7 +235,7 @@ def load_data(file_uploader=None):
 modelo_ann, cluster_model = load_models()
 
 # --- HEADER PRINCIPAL ---
-st.title("🌾 PREDWEEM LOLIUM - PERGAMINO 2026")
+st.title("🌾 PREDWEEM LOLIUM - PERGAMINO (BA) LAT = -33.9443 LON = -60.5745")
 
 # --- MENÚ DESPLEGABLE: DATOS DEL LOTE (MAIN PAGE) ---
 with st.expander("📂 1. Datos del Lote", expanded=True):
