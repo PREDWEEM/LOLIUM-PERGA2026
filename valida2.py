@@ -15,7 +15,7 @@
 # - REGLA ANTI-CRUCE: Emparejamiento por proximidad cronológica.
 # - ELIMINACIÓN DE ECOS: Aplanamiento visual de réplicas simuladas contiguas y TN asimétrico.
 # - DETECCIÓN AGRONÓMICA: Lógica de Gemelos Flanqueantes + Filtro de Indulto para FP.
-# - Bypass Agronómico de Ruptura de Dormición por Choque Hídrico Temprano (0.75).
+# - Bypass Agronómico de Ruptura de Dormición por Choque Hídrico Temprano (1.0).
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
 # - MEJORA: Sensibilidad térmica e hídrica agresiva según nivel de rastrojo.
@@ -608,7 +608,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     limite_juliano_temprano = 110 # Aprox. 20 de Abril
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
     mask_ruptura = (df["Julian_days"] <= limite_juliano_temprano) & (df["Prec_3d"] >= umbral_choque_hidrico)
-    df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75) 
+    df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 1.0) 
 
     # ---------------------------------------------------------
     # MÓDULO HÍDRICO SUPERFICIAL (BHS PERGAMINO)
