@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 # ===============================================================
 # 🌾 PREDWEEM OPERATIVO vK4.9.8 — LOLIUM PERGAMINO 2026
@@ -16,6 +17,8 @@
 # - MEJORA: Sensibilidad térmica e hídrica agresiva según nivel de rastrojo.
 # - OPTIMIZACIÓN: Vectorización matricial pura en PracticalANNModel.predict.
 # - SIN MÓDULO DE VALIDACIÓN (Versión exclusiva para predicción operativa).
+# - NUEVO: Modulador de Agotamiento de Banco de Semillas (64%, 17.7%, 13.7%, 3.8%, 0.8%).
+# - MEJORA: Techo estricto (Clip 0-1) para estabilizar tasas diarias y eje Y fijo.
 # ===============================================================
 import streamlit as st
 import time
@@ -84,35 +87,33 @@ st.markdown("""
 
 BASE = Path(__file__).parent if "__file__" in globals() else Path.cwd()
 
-import base64
-
 # --- FUNCIÓN PARA INYECTAR IMAGEN DE FONDO ---
 def set_bg_hack(main_bg_file):
     """
     Inyecta una imagen de fondo codificada en Base64 en el cuerpo de la aplicación.
     Funciona bien para fondos de pantalla completa con bajo contraste.
     """
-    with open(main_bg_file, "rb") as image_file:
-        encoded_string = base64.b64encode(image_file.read()).decode()
-    st.markdown(
-        f"""
-        <style>
-        .stApp {{
-            background-image: url(data:image/png;base64,{encoded_string});
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    try:
+        with open(main_bg_file, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode()
+        st.markdown(
+            f"""
+            <style>
+            .stApp {{
+                background-image: url(data:image/png;base64,{encoded_string});
+                background-size: cover;
+                background-position: center;
+                background-repeat: no-repeat;
+                background-attachment: fixed;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+    except FileNotFoundError:
+        pass
 
-# --- LLAMA A LA FUNCIÓN (Usa la Opción 1 o 2) ---
-# st.set_page_config(...) # Tu configuración actual
-# Tu bloque <style> actual...
-set_bg_hack("fondo_predweem_v3.png") # Reemplaza con tu archivo
+set_bg_hack("fondo_predweem_v3.png")
 
 # ---------------------------------------------------------
 # 2. ROBUSTEZ Y ARCHIVOS (MOCKS)
@@ -162,8 +163,7 @@ def calculate_tt_scalar(t, t_base, t_opt, t_crit):
     else:
         return 0.0
 
-def calcular_et0_hargreaves(jday, tmax, tmin, latitud=-33.89):
-    # Latitud ajustada para Pergamino (-33.89)
+def calcular_et0_hargreaves(jday, tmax, tmin, latitud=-33.94):
     lat_rad = np.radians(latitud)
     dr = 1 + 0.033 * np.cos(2 * np.pi / 365 * jday)
     dec = 0.409 * np.sin(2 * np.pi / 365 * jday - 1.39)
@@ -204,7 +204,6 @@ class PracticalANNModel:
 
     def predict(self, Xreal):
         Xn = self.normalize(Xreal)
-        # Vectorización matricial pura
         z1 = Xn @ self.IW + self.bIW
         a1 = np.tanh(z1)
         z2 = (a1 @ self.LW.T).flatten() + self.bLW
@@ -227,6 +226,40 @@ def load_models():
     except Exception as e:
         st.error(f"Error cargando modelos: {e}")
         return None, None
+
+def aplicar_patron_agotamiento(df, col_emer='EMERREL', patron=[0.640, 0.177, 0.137, 0.038, 0.008]):
+    """
+    Identifica flujos de emergencia y escala su volumen para que respeten
+    el patrón de agotamiento demográfico del banco de semillas.
+    """
+    df_mod = df.copy()
+    emer = df_mod[col_emer].values
+    
+    is_emerging = emer > 0.01
+
+    cambios = np.diff(is_emerging.astype(int))
+    inicios = np.where(cambios == 1)[0] + 1
+    fines = np.where(cambios == -1)[0] + 1
+
+    if is_emerging[0]: inicios = np.insert(inicios, 0, 0)
+    if is_emerging[-1]: fines = np.append(fines, len(emer))
+
+    suma_total_original = np.sum(emer)
+    
+    if suma_total_original == 0 or len(inicios) == 0:
+        return df_mod
+
+    nuevo_emer = np.zeros_like(emer)
+
+    for idx, (ini, fin) in enumerate(zip(inicios, fines)):
+        peso_objetivo = patron[idx] if idx < len(patron) else 0.0
+        suma_bloque = np.sum(emer[ini:fin])
+        if suma_bloque > 0:
+            factor = (suma_total_original * peso_objetivo) / suma_bloque
+            nuevo_emer[ini:fin] = emer[ini:fin] * factor
+
+    df_mod[col_emer] = nuevo_emer
+    return df_mod
 
 def load_data(file_uploader=None):
     if file_uploader:
@@ -404,6 +437,13 @@ if df_meteo_raw is not None and modelo_ann is not None:
     mask_inhibicion = df["Tmedia_10d"] >= umbral_termoinhibicion
     df.loc[mask_inhibicion, "EMERREL"] = 0.0
 
+    # =======================================================
+    # NUEVO: APLICAR PATRÓN DE AGOTAMIENTO Y TECHO 0-1
+    # =======================================================
+    df = aplicar_patron_agotamiento(df)
+    df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
+    # =======================================================
+
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
 
     fecha_hoy = pd.Timestamp.now().normalize()
@@ -517,10 +557,12 @@ if df_meteo_raw is not None and modelo_ann is not None:
                     annotation_position="top left"
                 )
 
+            # Eje Y anclado en 0 y 1.05
             fig_emer.update_layout(
                 title="Dinámica de Emergencia y Momento Crítico",
                 height=450,
                 hovermode="x unified",
+                yaxis=dict(range=[0, 1.05]),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig_emer, use_container_width=True)
