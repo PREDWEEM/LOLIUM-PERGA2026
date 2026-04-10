@@ -20,6 +20,8 @@
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.89).
 # - MEJORA: Sensibilidad térmica e hídrica agresiva según nivel de rastrojo.
 # - OPTIMIZACIÓN: Vectorización matricial pura en PracticalANNModel.predict.
+# - NUEVO: Modulador de Agotamiento de Banco de Semillas (64%, 17.7%, 13.7%, 3.8%, 0.8%).
+# - MEJORA: Techo estricto (Clip 0-1) para estabilizar tasas diarias y eje Y fijo.
 # ===============================================================
 
 import streamlit as st
@@ -198,6 +200,40 @@ def load_data(file_uploader, default_name):
     elif (BASE / f"{default_name}.xlsx").exists():
         return pd.read_excel(BASE / f"{default_name}.xlsx")
     return None
+
+def aplicar_patron_agotamiento(df, col_emer='EMERREL', patron=[0.640, 0.177, 0.137, 0.038, 0.008]):
+    """
+    Identifica flujos de emergencia y escala su volumen para que respeten
+    el patrón de agotamiento demográfico del banco de semillas.
+    """
+    df_mod = df.copy()
+    emer = df_mod[col_emer].values
+    
+    is_emerging = emer > 0.01
+
+    cambios = np.diff(is_emerging.astype(int))
+    inicios = np.where(cambios == 1)[0] + 1
+    fines = np.where(cambios == -1)[0] + 1
+
+    if is_emerging[0]: inicios = np.insert(inicios, 0, 0)
+    if is_emerging[-1]: fines = np.append(fines, len(emer))
+
+    suma_total_original = np.sum(emer)
+    
+    if suma_total_original == 0 or len(inicios) == 0:
+        return df_mod
+
+    nuevo_emer = np.zeros_like(emer)
+
+    for idx, (ini, fin) in enumerate(zip(inicios, fines)):
+        peso_objetivo = patron[idx] if idx < len(patron) else 0.0
+        suma_bloque = np.sum(emer[ini:fin])
+        if suma_bloque > 0:
+            factor = (suma_total_original * peso_objetivo) / suma_bloque
+            nuevo_emer[ini:fin] = emer[ini:fin] * factor
+
+    df_mod[col_emer] = nuevo_emer
+    return df_mod
 
 # --- NUEVAS FUNCIONES DE INTEGRACIÓN DE INTERVALOS ---
 def sincronizar_series_por_intervalos(df_sim, df_campo, col_fecha, col_plm2):
@@ -626,7 +662,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df.loc[humedad_relativa < 0.20, "EMERREL"] = 0.0
 
     # 2. TRIGGER DE RECARGA INICIAL (Lluvia puntual)
-    # Se bloquea la emergencia a 0% hasta que un solo evento de lluvia alcance la Capacidad de Campo configurada.
     df['Lluvia_Recarga'] = (df['Prec'] >= w_max_val).cummax()
     df.loc[~df['Lluvia_Recarga'], "EMERREL"] = 0.0
 
@@ -636,6 +671,13 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
     mask_inhibicion = df["Tmedia_10d"] >= umbral_termoinhibicion
     df.loc[mask_inhibicion, "EMERREL"] = 0.0
+
+    # =======================================================
+    # NUEVO: APLICAR PATRÓN DE AGOTAMIENTO Y TECHO 0-1
+    # =======================================================
+    df = aplicar_patron_agotamiento(df)
+    df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
+    # =======================================================
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
 
@@ -797,7 +839,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
                 fin_res = fecha_control + timedelta(days=residualidad)
                 fig_emer.add_vrect(x0=fecha_control.timestamp() * 1000, x1=fin_res.timestamp() * 1000, fillcolor="blue", opacity=0.1, layer="below", line_width=0, annotation_text=f"Protección ({residualidad}d)")
 
-            fig_emer.update_layout(title="Dinámica de Emergencia y Momento Crítico", height=450, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+            # CORRECCIÓN: Eje Y anclado estrictamente a 0 - 1.05
+            fig_emer.update_layout(
+                title="Dinámica de Emergencia y Momento Crítico", 
+                height=450, 
+                hovermode="x unified", 
+                yaxis=dict(range=[0, 1.05]),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
             st.plotly_chart(fig_emer, use_container_width=True)
 
             if fecha_inicio_ventana:
