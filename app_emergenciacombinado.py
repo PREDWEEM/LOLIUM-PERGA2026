@@ -3,18 +3,19 @@
 # ===============================================================
 # 🌾 PREDWEEM OPERATIVO vK4.9.8 — LOLIUM PERGAMINO 2026
 # Actualización:
-# - UI: "Datos del Lote" movido a st.expander en la página principal.
+# - UI: Arquitectura de alto rendimiento (Carga Rápida + st.expander superior).
+# - UI: Slider continuo (0-100%) para Nivel de Rastrojo con interpolación dinámica y Tarjeta HTML.
 # - UNIFICACIÓN MECANÍSTICA 100% (Modo Predicción Pura).
 # - NUEVO: Escudo Termofisiológico Dinámico (Media Móvil 10d) para inhibición estival.
 # - NUEVO: Alerta visual de Estrés Térmico post-emergencia.
 # - NUEVO: Corte Hídrico Estricto (20% HR) acoplado a la sigmoide.
-# - ELIMINADO: Exigencia hídrica de 100mm. Se restaura a Cap. de Campo estándar (ej. 20mm).
+# - ELIMINADO: Exigencia hídrica de 100mm. Se restaura a Cap. de Campo estándar.
 # - NUEVO: Secado exponencial del suelo (Ke Dinámico / Factor Kr) en BHS.
 # - NUEVO: Bloqueo de emergencia (0%) hasta que una LLUVIA PUNTUAL supere la Cap. de Campo.
-# - Bypass de Ruptura de Dormición por Choque Hídrico Temprano (Pulso 0.75).
+# - Bypass de Ruptura de Dormición por Choque Hídrico Temprano (Pulso 0.75 PERGAMINO).
 # - Módulo Mecanístico de Balance Hídrico Superficial (BHS) activo.
 # - Evapotranspiración (ET0) mediante Hargreaves-Samani (Latitud Pergamino: -33.94).
-# - MEJORA: Sensibilidad térmica e hídrica agresiva según nivel de rastrojo.
+# - MEJORA: Sensibilidad térmica e hídrica agresiva continua según nivel de rastrojo.
 # - OPTIMIZACIÓN: Vectorización matricial pura en PracticalANNModel.predict.
 # - SIN MÓDULO DE VALIDACIÓN (Versión exclusiva para predicción operativa).
 # - NUEVO: Modulador de Agotamiento de Banco de Semillas (64%, 17.7%, 13.7%, 3.8%, 0.8%).
@@ -22,35 +23,27 @@
 # ===============================================================
 import streamlit as st
 import time
-
-# 1. PANTALLA DE CARGA ULTRARRÁPIDA
-if 'arranque_fase' not in st.session_state:
-    st.set_page_config(page_title="PREDWEEM", layout="wide")
-    st.markdown("<br><br><br>", unsafe_allow_html=True)
-    st.info("🚜 **Iniciando Servidor PREDWEEM...** Cargando librerías pesadas en la nube. (Esto puede tomar unos 10 segundos).")
-    st.progress(20)
-    
-    st.session_state.arranque_fase = 1
-    time.sleep(0.1) # Obliga al navegador a renderizar el cartel
-    st.rerun()      # Reinicia el código al instante
-
-# 2. IMPORTACIONES PESADAS (Ocurren MIENTRAS el usuario ve el cartel)
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import pickle
 import io
 import base64
+from datetime import timedelta
 from pathlib import Path
 
 # ---------------------------------------------------------
-# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO
+# 1. PANTALLA DE CARGA ULTRARRÁPIDA Y ESTILO
 # ---------------------------------------------------------
-st.set_page_config(
-    page_title="PREDWEEM PERGAMINO vK4.9.8 (Operativo)",
-    layout="wide",
-    page_icon="🌾"
-)
+if 'arranque_fase' not in st.session_state:
+    st.set_page_config(page_title="PREDWEEM PERGAMINO vK4.9.8 (Operativo)", layout="wide", page_icon="🌾")
+    st.markdown("<br><br><br>", unsafe_allow_html=True)
+    st.info("🚜 **Iniciando Servidor PREDWEEM Operativo...** Cargando librerías pesadas en la nube. (Esto puede tomar unos 10 segundos).")
+    st.progress(20)
+    
+    st.session_state.arranque_fase = 1
+    time.sleep(0.1)
+    st.rerun()
 
 st.markdown("""
 <style>
@@ -82,32 +75,28 @@ st.markdown("""
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     header {visibility: hidden;}
+    
+    div[data-testid="stVerticalBlockBorderWrapper"], 
+    div[data-testid="stContainerBorder"],
+    div[data-testid="stContainer"] > div > div[style*="border"],
+    div[data-testid="stVerticalBlock"] > div[style*="border-radius"] {
+        background-color: #ffffff !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+        padding: 15px !important;
+        border: 1px solid #e2e8f0 !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 BASE = Path(__file__).parent if "__file__" in globals() else Path.cwd()
 
-# --- FUNCIÓN PARA INYECTAR IMAGEN DE FONDO ---
 def set_bg_hack(main_bg_file):
-    """
-    Inyecta una imagen de fondo codificada en Base64 en el cuerpo de la aplicación.
-    Funciona bien para fondos de pantalla completa con bajo contraste.
-    """
     try:
         with open(main_bg_file, "rb") as image_file:
             encoded_string = base64.b64encode(image_file.read()).decode()
         st.markdown(
-            f"""
-            <style>
-            .stApp {{
-                background-image: url(data:image/png;base64,{encoded_string});
-                background-size: cover;
-                background-position: center;
-                background-repeat: no-repeat;
-                background-attachment: fixed;
-            }}
-            </style>
-            """,
+            f"""<style>.stApp {{ background-image: url(data:image/png;base64,{encoded_string}); background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed; }}</style>""",
             unsafe_allow_html=True
         )
     except FileNotFoundError:
@@ -164,6 +153,7 @@ def calculate_tt_scalar(t, t_base, t_opt, t_crit):
         return 0.0
 
 def calcular_et0_hargreaves(jday, tmax, tmin, latitud=-33.94):
+    # Latitud Pergamino
     lat_rad = np.radians(latitud)
     dr = 1 + 0.033 * np.cos(2 * np.pi / 365 * jday)
     dec = 0.409 * np.sin(2 * np.pi / 365 * jday - 1.39)
@@ -204,6 +194,7 @@ class PracticalANNModel:
 
     def predict(self, Xreal):
         Xn = self.normalize(Xreal)
+        # Vectorización matricial pura
         z1 = Xn @ self.IW + self.bIW
         a1 = np.tanh(z1)
         z2 = (a1 @ self.LW.T).flatten() + self.bLW
@@ -288,7 +279,7 @@ with st.expander("📂 1. Datos del Lote", expanded=True):
     col_upload, col_rastrojo = st.columns(2)
     
     with col_upload:
-        archivo_meteo = st.file_uploader("Subir Clima Manual (Opcional)", type=["xlsx", "csv"], help="Si no subes nada, el sistema leerá automáticamente meteo_daily.csv")
+        archivo_meteo = st.file_uploader("Subir Clima Manual (Opcional)", type=["xlsx", "csv"], help="Si no subes nada, el sistema leerá automáticamente meteo_daily.csv de Pergamino")
         df_meteo_raw = load_data(archivo_meteo)
         if df_meteo_raw is not None:
             st.success("✅ Datos climáticos cargados.")
@@ -296,32 +287,48 @@ with st.expander("📂 1. Datos del Lote", expanded=True):
             st.error("❌ No se encontró 'meteo_daily.csv' ni se subió ningún archivo.")
             
     with col_rastrojo:
-        tipo_manejo = st.selectbox(
-            "Nivel de Rastrojo",
-            options=[
-                "Cobertura Muy Densa (SD - Extra Rastrojo/CS)",
-                "Alta Cobertura (SD - Rastrojo Trigo/Maíz)",
-                "Cobertura Media (SD - Rastrojo Soja)",
-                "Baja Cobertura / Labranza Convencional"
-            ],
-            index=1 
-        )
-        
-        # Lógica de cobertura ampliada
-        if "Muy Densa" in tipo_manejo:
-            ke_val = 0.10      
-            mod_termico = 0.80 
-        elif "Alta" in tipo_manejo:
-            ke_val = 0.25      
-            mod_termico = 0.90 
-        elif "Media" in tipo_manejo:
-            ke_val = 0.50      
-            mod_termico = 0.95 
-        else:
-            ke_val = 0.95      
-            mod_termico = 1.00 
+        with st.container(border=True):
+            st.markdown("#### 🌾 Manejo de Superficie") 
             
-        st.caption(f"Coeficiente Ke interno aplicado: **{ke_val:.2f}** | Modulador Térmico Suelo: **{mod_termico:.2f}**")
+            # Slider continuo
+            cobertura_pct = st.slider(
+                "Cobertura de Rastrojo en Suelo (%)",
+                min_value=0, max_value=100, value=95, step=5,
+                help="0% = Suelo desnudo / Labranza convencional. 100% = Cobertura total (Ej. Cultivo de Servicio denso)."
+            )
+
+            # Interpolación de valores dinámicos
+            x_cobertura = [0, 30, 70, 100] 
+            y_ke = [0.95, 0.50, 0.25, 0.10]
+            ke_val = float(np.interp(cobertura_pct, x_cobertura, y_ke))
+            
+            y_mod_termico = [1.00, 0.95, 0.90, 0.80]
+            mod_termico = float(np.interp(cobertura_pct, x_cobertura, y_mod_termico))
+            
+            # Tarjeta visual HTML
+            html_card = f"""
+            <div style="
+                background-color: #ffffff;
+                padding: 15px 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+                border: 1px solid #e2e8f0;
+                margin-top: 15px;
+            ">
+                <h5 style="color: #1e293b; margin-top: 0; margin-bottom: 12px; font-size: 0.95rem;">
+                    Parámetros Dinámicos Aplicados
+                </h5>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="color: #475569; font-size: 0.9rem;">Coeficiente Hídrico Suelo (Ke):</span>
+                    <span style="color: #0284c7; font-weight: bold; font-size: 1.05rem;">{ke_val:.2f}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #475569; font-size: 0.9rem;">Modulador Térmico Suelo:</span>
+                    <span style="color: #b91c1c; font-weight: bold; font-size: 1.05rem;">{mod_termico:.2f}</span>
+                </div>
+            </div>
+            """
+            st.markdown(html_card, unsafe_allow_html=True)
 
 
 # --- SIDEBAR ---
@@ -405,7 +412,8 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
     
     mask_ruptura = (df["Julian_days"] <= limite_juliano_temprano) & (df["Prec_3d"] >= umbral_choque_hidrico)
-    # Impulso forzado para asegurar ruptura (0.75 en Pergamino)
+    
+    # PERGAMINO: Impulso forzado para asegurar ruptura limitado a 0.75
     df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75) 
 
     # ---------------------------------------------------------
@@ -415,7 +423,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo_max=ke_val)
     
     humedad_relativa = df["W_superficial"] / w_max_val
-    
     df["Hydric_Factor"] = 1 / (1 + np.exp(-10 * (humedad_relativa - 0.3)))
     
     # Multiplicador final mecanístico
@@ -425,20 +432,20 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df.loc[humedad_relativa < 0.20, "EMERREL"] = 0.0
 
     # 2. TRIGGER DE RECARGA INICIAL (Lluvia puntual)
-    # Se bloquea la emergencia a 0% hasta que un solo evento de lluvia alcance la Capacidad de Campo configurada.
+    # Se bloquea la emergencia a 0% hasta que un solo evento de lluvia alcance la Cap. de Campo
     df['Lluvia_Recarga'] = (df['Prec'] >= w_max_val).cummax()
     df.loc[~df['Lluvia_Recarga'], "EMERREL"] = 0.0
 
     # --- ESCUDO TERMOFISIOLÓGICO Y CÁLCULO TÉRMICO ---
     df["Tmedia"] = df["Tmedia_aire"]
 
-    # Escudo Termoinhibición
+    # Escudo Termoinhibición Estival
     df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
     mask_inhibicion = df["Tmedia_10d"] >= umbral_termoinhibicion
     df.loc[mask_inhibicion, "EMERREL"] = 0.0
 
     # =======================================================
-    # NUEVO: APLICAR PATRÓN DE AGOTAMIENTO Y TECHO 0-1
+    # PERGAMINO: APLICAR PATRÓN DE AGOTAMIENTO Y TECHO 0-1
     # =======================================================
     df = aplicar_patron_agotamiento(df)
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
