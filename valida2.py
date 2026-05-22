@@ -5,7 +5,7 @@
 # - ADAPTACIÓN PERGAMINO: Coordenadas precisas actualizadas a LAT=-33.9443 y LON=-60.5745.
 # - ET0: Cálculo de Hargreaves-Samani anclado estrictamente en -33.9443.
 # - ESPECÍFICO PERGAMINO: Bypass por choque hídrico temprano limitado a 0.75.
-# - ESPECÍFICO PERGAMINO: Modulador de agotamiento de banco de semillas y clip 0-1.
+# - ESPECÍFICO PERGAMINO: Techo 0-1 (Patrón de agotamiento eliminado).
 # - VALIDACIÓN: Reincorporación del módulo de campo. Match estricto (Campo > 0 O Simulado > 0).
 # - UNIFICACIÓN MECANÍSTICA 100%: Integración por intervalos y métricas robustas (CCC, RMSE).
 # - VISUALIZACIÓN LOGARÍTMICA: Transformación analítica log10(x + 0.01) para dinámicas.
@@ -127,27 +127,6 @@ def balance_hidrico_superficial(prec, et0, w_max=30.0, ke_suelo=0.4):
         evaporacion_real = et0[i] * ke_suelo
         w[i] = max(0.0, min(w_max, w[i-1] + prec[i] - evaporacion_real))
     return w
-
-def aplicar_patron_agotamiento(df, col_emer='EMERREL', patron=[0.657, 0.170, 0.082, 0.035, 0.032, 0.022, 0.002, 0.002, 0.002, 0.002, 0]):
-    df_mod = df.copy()
-    emer = df_mod[col_emer].values
-    is_emerging = emer > 0.01
-    cambios = np.diff(is_emerging.astype(int))
-    inicios = np.where(cambios == 1)[0] + 1
-    fines = np.where(cambios == -1)[0] + 1
-    if is_emerging[0]: inicios = np.insert(inicios, 0, 0)
-    if is_emerging[-1]: fines = np.append(fines, len(emer))
-    suma_total_original = np.sum(emer)
-    if suma_total_original == 0 or len(inicios) == 0: return df_mod
-    nuevo_emer = np.zeros_like(emer)
-    for idx, (ini, fin) in enumerate(zip(inicios, fines)):
-        peso_objetivo = patron[idx] if idx < len(patron) else 0.0
-        suma_bloque = np.sum(emer[ini:fin])
-        if suma_bloque > 0:
-            factor = (suma_total_original * peso_objetivo) / suma_bloque
-            nuevo_emer[ini:fin] = emer[ini:fin] * factor
-    df_mod[col_emer] = nuevo_emer
-    return df_mod
 
 class PracticalANNModel:
     def __init__(self, IW, bIW, LW, bLW):
@@ -334,8 +313,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
     df.loc[df["Tmedia_10d"] >= umbral_termoinhibicion, "EMERREL"] = 0.0
 
-    # PERGAMINO: Patrón de Agotamiento y Techo 0-1
-    df = aplicar_patron_agotamiento(df)
+    # PERGAMINO: Techo 0-1
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
