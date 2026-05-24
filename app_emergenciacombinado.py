@@ -9,7 +9,6 @@
 # - VALIDACIÓN: Reincorporación del módulo de campo. Match estricto (Campo > 0 O Simulado > 0).
 # - UNIFICACIÓN MECANÍSTICA 100%: Integración por intervalos y métricas robustas (CCC, RMSE).
 # - VISUALIZACIÓN LOGARÍTMICA: Transformación analítica log10(x + 0.01) para dinámicas.
-# - SIMPLIFICACIÓN: Se eliminan las métricas de sincronía de pulsos/cohortes (F1, TP, FP).
 # ===============================================================
 
 import streamlit as st
