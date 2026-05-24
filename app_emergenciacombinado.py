@@ -363,15 +363,24 @@ if df_meteo_raw is not None and modelo_ann is not None:
         msg_estado = f"Pico detectado el {fecha_inicio_ventana.strftime('%d/%m')}"
         dias_stress = len(df_desde_pico[df_desde_pico["Tmedia"] > t_opt_max])
 
-    pearson_r, rmse_acum, ccc_acum = 0.0, 0.0, 0.0
+
+    # Inicialización de métricas
+    pearson_r, nse_flujos, kge_flujos, rmse_acum, ccc_acum = 0.0, 0.0, 0.0, 0.0, 0.0
     pec, peak_lag, lead_time, desfase_t50 = 0.0, 0, 0, 0
 
     if df_campo is not None:
         df_sincronizado = sincronizar_series_por_intervalos(df, df_campo, col_fecha, col_plm2)
         metricas_robustas = calcular_metricas_validacion_integral(df_sincronizado)
-        pearson_r, rmse_acum, ccc_acum = metricas_robustas["Pearson_Flujos"], metricas_robustas["RMSE_Acumulado"], metricas_robustas["CCC_Acumulado"]
-        df_campo["Sim_Intervalo"] = df_sincronizado["Sim_Relativo"] 
+        
+        pearson_r = metricas_robustas["Pearson_Flujos"]
+        nse_flujos = metricas_robustas["NSE_Flujos"]
+        kge_flujos = metricas_robustas["KGE_Flujos"]
+        rmse_acum = metricas_robustas["RMSE_Acumulado"]
+        ccc_acum = metricas_robustas["CCC_Acumulado"]
+        
+        df_campo["Sim_Intervalo"] = df_sincronizado["Sim_Relativo"]
 
+   
         tot_plm2 = df_campo[col_plm2].sum()
         if tot_plm2 > 0:
             df_campo['cum_plm2_norm'] = df_campo[col_plm2].cumsum() / tot_plm2
