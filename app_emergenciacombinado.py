@@ -418,12 +418,16 @@ if df_meteo_raw is not None and modelo_ann is not None:
     with tab1:
         if df_campo is not None:
             st.markdown("<p class='metric-header'>🚜 FIDELIDAD DE SIMULACIÓN (INTEGRAL)</p>", unsafe_allow_html=True)
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Correlación (Pearson)", f"{pearson_r:.3f}", "Sincronía (Valores > 0)")
-            c2.metric("Concordancia (CCC)", f"{ccc_acum:.3f}", "Fidelidad de Trayectoria")
-            c3.metric("Error (RMSE)", f"{rmse_acum:.3f}", "Magnitud de desvío", delta_color="inverse")
-            c4.metric("Desfase Global (T50)", f"{desfase_t50:+d} días", "Anticipo (-)" if desfase_t50 < 0 else "Atraso (+)" if desfase_t50 > 0 else "Sincronizado", delta_color="inverse" if desfase_t50 > 0 else "normal" if desfase_t50 < 0 else "off")
-
+            c1, c2, c3, c4, c5 = st.columns(5)
+            
+            # KGE y NSE asumen el protagonismo como los estándares de eficiencia
+            c1.metric("Eficiencia (KGE)", f"{kge_flujos:.3f}", "Ajuste Global")
+            c2.metric("Predictivo (NSE)", f"{nse_flujos:.3f}", "Flujos")
+            c3.metric("Trayectoria (CCC)", f"{ccc_acum:.3f}", "Curva Acum.")
+            c4.metric("Error (RMSE)", f"{rmse_acum:.3f}", "Desvío Acum.", delta_color="inverse")
+            c5.metric("Desfase (T50)", f"{desfase_t50:+d} días", "Sincronía Operativa", delta_color="inverse" if desfase_t50 > 0 else "normal" if desfase_t50 < 0 else "off")
+    
+        
             if fecha_control:
                 st.markdown("<p class='metric-header' style='margin-top:15px;'>⚙️ LOGÍSTICA DE CONTROL</p>", unsafe_allow_html=True)
                 l1, l2, l3 = st.columns(3)
