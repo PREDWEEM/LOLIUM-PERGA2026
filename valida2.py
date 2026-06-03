@@ -489,6 +489,17 @@ if df_meteo_raw is not None and modelo_ann is not None:
         msg_estado = f"Pico detectado el {fecha_inicio_ventana.strftime('%d/%m')}"
         dias_stress = len(df_desde_pico[df_desde_pico["Tmedia"] > t_opt_max])
 
+    
+
+
+    # =======================================================
+    # NUEVO: LAG DE EMERGENCIA (Retraso de 10 días calendario)
+    # =======================================================
+    df["EMERREL"] = df["EMERREL"].shift(10).fillna(0.0)
+    # =======================================================
+
+    df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
+    
     # Inicialización de métricas robustas
     pearson_r, nse_flujos, kge_flujos, rmse_acum, ccc_acum = 0.0, 0.0, 0.0, 0.0, 0.0
     pec, peak_lag, lead_time, desfase_t50 = 0.0, 0, 0, 0
