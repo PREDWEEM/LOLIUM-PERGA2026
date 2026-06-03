@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 # ===============================================================
-# 🌾 PREDWEEM vK4.9.18 — LOLIUM PERGAMINO (BIMODAL TUNABLE)
-# Nueva funcionalidad:
-# - Parámetros de la función bimodal ahora son AJUSTABLES en el sidebar
-# - Podés modificar Offset, medias, sigmas y amplitudes en tiempo real
-# - Hasta que la curva verde (simulada) se parezca lo más posible a los puntos rojos (campo)
+# 🌾 PREDWEEM vK4.9.19 — LOLIUM PERGAMINO (BIMODAL TUNABLE) - FIXED
+# Corrección del error StreamlitAPIException en sliders con float
+# Usa number_input (más estable y preciso para ajustar la bimodal)
 # ===============================================================
 import streamlit as st
 import numpy as np
@@ -94,22 +92,20 @@ def balance_hidrico_superficial(prec, et0, w_max=30.0, ke_suelo=0.4):
         w[i] = max(0.0, min(w_max, w[i-1] + prec[i] - evaporacion_real))
     return w
 
-# >>> FUNCIÓN BIMODAL AJUSTABLE (la que vamos a tunear)
+# >>> FUNCIÓN BIMODAL AJUSTABLE
 def calcular_emergencia_bimodal(julian_day, offset, mean1, mean2, sigma1, sigma2, amp1, amp2):
-    """Función bimodal con parámetros ajustables desde el sidebar."""
     x = julian_day - offset
     term1 = amp1 * np.exp(-((x - mean1)**2) / (2 * sigma1**2))
     term2 = amp2 * np.exp(-((x - mean2)**2) / (2 * sigma2**2))
     return term1 + term2
-# >>> FIN FUNCIÓN BIMODAL AJUSTABLE
+# >>> FIN
 
 class PracticalANNModel:
     def __init__(self, IW, bIW, LW, bLW):
         self.IW, self.bIW, self.LW, self.bLW = IW, bIW, LW, bLW
         self.input_min = np.array([1, 0, -7, 0])
         self.input_max = np.array([300, 41, 25.5, 84])
-    def normalize(self, X):
-        return 2 * (X - self.input_min) / (self.input_max - self.input_min) - 1
+    def normalize(self, X): return 2 * (X - self.input_min) / (self.input_max - self.input_min) - 1
     def predict(self, Xreal):
         Xn = self.normalize(Xreal)
         a1 = np.tanh(Xn @ self.IW + self.bIW)
@@ -121,8 +117,7 @@ def load_models():
     try:
         ann = PracticalANNModel(np.load(BASE / "IW.npy"), np.load(BASE / "bias_IW.npy"),
                                 np.load(BASE / "LW.npy"), np.load(BASE / "bias_out.npy"))
-        with open(BASE / "modelo_clusters_k3.pkl", "rb") as f:
-            k3 = pickle.load(f)
+        with open(BASE / "modelo_clusters_k3.pkl", "rb") as f: k3 = pickle.load(f)
         return ann, k3
     except Exception as e:
         st.error(f"Error cargando modelos: {e}")
@@ -137,8 +132,7 @@ def load_data(file_uploader, default_name):
         return pd.read_excel(BASE / f"{default_name}.xlsx")
     try:
         return pd.read_csv(f"https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/{default_name}.csv")
-    except:
-        return None
+    except: return None
 
 def sincronizar_series_flexibles(df_sim, df_campo, col_fecha, col_plm2, freq_dias=7):
     fecha_min = min(df_sim["Fecha"].min(), df_campo[col_fecha].min())
@@ -169,8 +163,7 @@ def calcular_metricas_validacion_integral(df_sync):
     mask_activos = (df_sync['Campo_Relativo'] > 0) | (df_sync['Sim_Relativo'] > 0)
     df_activos = df_sync[mask_activos].copy()
     if len(df_activos) < 2:
-        return {"Pearson_Flujos": 0.0, "NSE_Flujos": 0.0, "KGE_Flujos": 0.0,
-                "RMSE_Acumulado": 0.0, "CCC_Acumulado": 0.0}
+        return {"Pearson_Flujos": 0.0, "NSE_Flujos": 0.0, "KGE_Flujos": 0.0, "RMSE_Acumulado": 0.0, "CCC_Acumulado": 0.0}
     obs = df_activos['Campo_Relativo'].values
     sim = df_activos['Sim_Relativo'].values
     pearson_r = np.corrcoef(obs, sim)[0, 1] if np.std(obs) > 0 and np.std(sim) > 0 else 0.0
@@ -198,7 +191,7 @@ def calcular_metricas_validacion_integral(df_sync):
 # ---------------------------------------------------------
 modelo_ann, cluster_model = load_models()
 
-st.title("🌾 PREDWEEM LOLIUM PERGAMINO — Función Bimodal AJUSTABLE vK4.9.18")
+st.title("🌾 PREDWEEM LOLIUM PERGAMINO — Función Bimodal AJUSTABLE vK4.9.19 (Corregido)")
 
 with st.expander("📂 1. Datos del Lote", expanded=True):
     col_upload, col_rastrojo = st.columns(2)
@@ -240,39 +233,38 @@ st.sidebar.divider()
 st.sidebar.markdown("## 📊 4. Flexibilidad Estadística")
 ventana_agrupacion = st.sidebar.slider("Ventana de Validación (días)", 1, 30, 11, 1)
 
-# ===================== CONTROLES DE LA FUNCIÓN BIMODAL =====================
+# ===================== CONTROLES DE LA FUNCIÓN BIMODAL (CORREGIDOS CON number_input) =====================
 st.sidebar.divider()
 st.sidebar.markdown("## 🔧 5. AJUSTE DE FUNCIÓN BIMODAL")
-st.sidebar.caption("Modificá estos valores hasta que la curva verde se parezca a los puntos rojos")
+st.sidebar.caption("Usá estos controles para que la curva verde coincida con tus datos observados (rojo)")
 
-offset_bimodal = st.sidebar.slider("Offset (días julianos)", 50, 150, 94, 1,
-    help="Desplaza toda la curva bimodal en el calendario")
+offset_bimodal = st.sidebar.number_input("Offset (días julianos)", min_value=50, max_value=150, value=94, step=1,
+    help="Desplaza toda la curva en el tiempo")
 
 col_m1, col_m2 = st.sidebar.columns(2)
 with col_m1:
-    mean1 = st.sidebar.slider("Media Pico 1 (días)", -30, 60, -1.4, 0.5)
+    mean1 = st.sidebar.number_input("Media Pico 1", min_value=-40.0, max_value=80.0, value=-1.4, step=0.5)
 with col_m2:
-    mean2 = st.sidebar.slider("Media Pico 2 (días)", -30, 60, 6.2, 0.5)
+    mean2 = st.sidebar.number_input("Media Pico 2", min_value=-40.0, max_value=80.0, value=6.2, step=0.5)
 
 col_s1, col_s2 = st.sidebar.columns(2)
 with col_s1:
-    sigma1 = st.sidebar.slider("Ancho Pico 1 (sigma)", 1.0, 40.0, 2.055, 0.5)
+    sigma1 = st.sidebar.number_input("Ancho Pico 1 (sigma)", min_value=1.0, max_value=50.0, value=8.0, step=0.5,
+        help="Subí este valor (8-25 recomendado) para que la emergencia dure más semanas")
 with col_s2:
-    sigma2 = st.sidebar.slider("Ancho Pico 2 (sigma)", 1.0, 40.0, 0.933, 0.5)
+    sigma2 = st.sidebar.number_input("Ancho Pico 2 (sigma)", min_value=1.0, max_value=50.0, value=6.0, step=0.5)
 
 col_a1, col_a2 = st.sidebar.columns(2)
 with col_a1:
-    amp1 = st.sidebar.slider("Amplitud Pico 1", 100.0, 2000.0, 903.72, 10.0)
+    amp1 = st.sidebar.number_input("Amplitud Pico 1", min_value=100.0, max_value=3000.0, value=900.0, step=10.0)
 with col_a2:
-    amp2 = st.sidebar.slider("Amplitud Pico 2", 100.0, 2000.0, 583.745, 10.0)
+    amp2 = st.sidebar.number_input("Amplitud Pico 2", min_value=100.0, max_value=3000.0, value=580.0, step=10.0)
 
-st.sidebar.caption("💡 Tip: Aumentá los sigmas (anchos) para que la emergencia dure más semanas. Ajustá las medias y el offset para mover los picos.")
+st.sidebar.caption("💡 Tip: Empezá con Sigma1 ≈ 12-18 y Sigma2 ≈ 8-12. Luego ajustá Offset y las Medias.")
 
 # ===================== MODO DEV =====================
 with st.sidebar.expander("🛠️ Modo Dev: Optimizador 3D", expanded=False):
-    st.caption("Busca la combinación de parámetros hídricos.")
-    if st.button("Ejecutar Barrido 3D"):
-        st.info("El optimizador 3D sigue usando la ANN original. Si querés que use la bimodal tunable, avisame.")
+    st.caption("El optimizador 3D sigue usando la ANN original.")
 
 df_meteo_raw = load_data(archivo_meteo, "meteo_daily")
 df_campo_raw = load_data(archivo_campo, "pergamino_campo")
@@ -302,7 +294,7 @@ if df_meteo_raw is not None:
         max_plm2 = df_campo[col_plm2].max() or 1
         df_campo['Campo_Normalizado'] = df_campo[col_plm2] / max_plm2
 
-    # >>> CÁLCULO CON FUNCIÓN BIMODAL AJUSTABLE
+    # >>> CÁLCULO CON LA FUNCIÓN BIMODAL AJUSTABLE
     raw_bimodal = np.array([
         calcular_emergencia_bimodal(jd, offset_bimodal, mean1, mean2, sigma1, sigma2, amp1, amp2)
         for jd in df["Julian_days"].values
@@ -312,7 +304,7 @@ if df_meteo_raw is not None:
     df["EMERREL"] = np.maximum(df["EMERREL_RAW"], 0.0)
     # >>> FIN
 
-    # Latencia inicial + Bypass + Factores hídricos y térmicos (sin cambios)
+    # Latencia inicial + Bypass + Factores hídricos y térmicos
     df.loc[df["Julian_days"] <= 25, "EMERREL"] = 0.0
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
     mask_ruptura = (df["Julian_days"] <= 110) & (df["Prec_3d"] >= umbral_choque_hidrico)
@@ -334,10 +326,9 @@ if df_meteo_raw is not None:
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
 
-    # Lógica de picos, métricas y gráficos (igual que antes)
+    # Lógica de picos
     fecha_hoy = pd.Timestamp.now().normalize()
-    if fecha_hoy not in df['Fecha'].values:
-        fecha_hoy = df['Fecha'].max()
+    if fecha_hoy not in df['Fecha'].values: fecha_hoy = df['Fecha'].max()
 
     indices_pulso = df.index[df["EMERREL"] >= umbral_er].tolist()
     dga_hoy, dga_7dias, dias_stress = 0.0, 0.0, 0
@@ -348,8 +339,7 @@ if df_meteo_raw is not None:
         df_desde_pico = df[df["Fecha"] >= fecha_inicio_ventana].copy()
         df_desde_pico["DGA_cum"] = df_desde_pico["DG"].cumsum()
         df_control = df_desde_pico[df_desde_pico["DGA_cum"] >= dga_optimo]
-        if not df_control.empty:
-            fecha_control = df_control.iloc[0]["Fecha"]
+        if not df_control.empty: fecha_control = df_control.iloc[0]["Fecha"]
         dga_hoy = df.loc[(df["Fecha"] >= fecha_inicio_ventana) & (df["Fecha"] <= fecha_hoy), "DG"].sum()
         idx_hoy = df[df["Fecha"] == fecha_hoy].index[0]
         dga_7dias = dga_hoy + df.iloc[idx_hoy + 1: idx_hoy + 8]["DG"].sum() if idx_hoy + 8 <= len(df) else dga_hoy
@@ -357,7 +347,6 @@ if df_meteo_raw is not None:
         dias_stress = len(df_desde_pico[df_desde_pico["Tmedia"] > t_opt_max])
 
     pearson_r = nse_flujos = kge_flujos = rmse_acum = ccc_acum = 0.0
-    pec = peak_lag = lead_time = desfase_t50 = 0
     if df_campo is not None:
         df_sincronizado = sincronizar_series_flexibles(df, df_campo, col_fecha, col_plm2, freq_dias=ventana_agrupacion)
         metricas = calcular_metricas_validacion_integral(df_sincronizado)
@@ -365,7 +354,6 @@ if df_meteo_raw is not None:
             metricas["Pearson_Flujos"], metricas["NSE_Flujos"], metricas["KGE_Flujos"],
             metricas["RMSE_Acumulado"], metricas["CCC_Acumulado"]
         )
-        # (cálculo de PEC, lag, lead time, desfase T50 omitido por brevedad - igual al código anterior)
 
     # VISUALIZACIÓN
     c_log = 0.01
@@ -375,43 +363,39 @@ if df_meteo_raw is not None:
         df_campo['Campo_Normalizado_LOG'] = np.log10(df_campo['Campo_Normalizado'] + c_log)
 
     colorscale_hard = [[0.0, "green"], [0.01, "green"], [0.02, "red"], [1.0, "red"]]
-    st.plotly_chart(
-        go.Figure(data=go.Heatmap(z=[df["EMERREL"].values], x=df["Fecha"], y=["Emergencia"],
+    st.plotly_chart(go.Figure(data=go.Heatmap(z=[df["EMERREL"].values], x=df["Fecha"], y=["Emergencia"],
                                   colorscale=colorscale_hard, zmin=0, zmax=1, showscale=False))
-        .update_layout(height=100, margin=dict(t=20, b=0, l=10, r=10), title="Mapa de Riesgo"),
-        use_container_width=True
-    )
+                    .update_layout(height=90, margin=dict(t=15, b=0, l=5, r=5), title="Mapa de Riesgo"),
+                    use_container_width=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 MONITOR DE DECISIÓN", "💧 PRECIPITACIONES Y SUELO", "📈 VALIDACIÓN", "🧪 BIO-CALIBRACIÓN"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 MONITOR", "💧 HIDRICO", "📈 VALIDACIÓN", "🧪 TÉRMICO"])
 
     with tab1:
         if df_campo is not None:
             st.markdown(f"<p class='metric-header'>🚜 FIDELIDAD DE SIMULACIÓN (Flujos a {ventana_agrupacion} días)</p>", unsafe_allow_html=True)
-            c1, c2, c3, c4, c5 = st.columns(5)
+            c1, c2, c3, c4 = st.columns(4)
             c1.metric("KGE", f"{kge_flujos:.3f}")
             c2.metric("NSE", f"{nse_flujos:.3f}")
             c3.metric("CCC", f"{ccc_acum:.3f}")
             c4.metric("RMSE", f"{rmse_acum:.3f}")
-            c5.metric("Desfase T50", f"{desfase_t50:+d} días")
 
-        col_main, col_gauge = st.columns([2, 1])
+        col_main, col_gauge = st.columns([2.2, 1])
         with col_main:
             fig_emer = go.Figure()
-            # Sombreado de ventanas de decisión
+            # Sombreado de Unidades de Decisión
             fecha_actual = df["Fecha"].min()
             sombreado = True
             while fecha_actual < df["Fecha"].max():
                 siguiente = fecha_actual + pd.Timedelta(days=ventana_agrupacion)
                 if sombreado:
-                    fig_emer.add_vrect(x0=fecha_actual, x1=siguiente, fillcolor="rgba(148,163,184,0.12)", layer="below", line_width=0)
+                    fig_emer.add_vrect(x0=fecha_actual, x1=siguiente, fillcolor="rgba(148,163,184,0.1)", layer="below", line_width=0)
                 sombreado = not sombreado
                 fecha_actual = siguiente
 
             fig_emer.add_trace(go.Scatter(x=df["Fecha"], y=df["EMERREL_LOG"], mode='lines',
                                           name='Tasa Diaria Sim. (Log)', line=dict(color='#166534', width=2.5),
                                           fill='tozeroy', fillcolor='rgba(22, 101, 52, 0.1)'))
-            fig_emer.add_hline(y=umbral_er_log, line_dash="dash", line_color="orange",
-                               annotation_text=f"Umbral ({umbral_er})")
+            fig_emer.add_hline(y=umbral_er_log, line_dash="dash", line_color="orange", annotation_text=f"Umbral ({umbral_er})")
 
             if df_campo is not None:
                 fig_emer.add_trace(go.Scatter(x=df_campo[col_fecha], y=df_campo['Campo_Normalizado_LOG'],
@@ -424,44 +408,42 @@ if df_meteo_raw is not None:
                                    annotation_text=f"Control ({dga_optimo}°Cd)")
 
             fig_emer.update_layout(title=f"Dinámica de Emergencia (Bimodal Ajustable) — Ventana: {ventana_agrupacion} días",
-                                   yaxis_title="Log10(Emergencia + 0.01)", height=480, hovermode="x unified",
+                                   yaxis_title="Log10(Emergencia + 0.01)", height=460, hovermode="x unified",
                                    legend=dict(orientation="h", y=1.02, x=1))
             st.plotly_chart(fig_emer, use_container_width=True)
 
             if fecha_inicio_ventana:
-                st.success(f"📅 Pico detectado: {fecha_inicio_ventana.strftime('%d-%m-%Y')}")
+                st.success(f"📅 Pico detectado: **{fecha_inicio_ventana.strftime('%d-%m-%Y')}**")
                 if fecha_control:
-                    st.error(f"🎯 Momento crítico de control: {fecha_control.strftime('%d-%m-%Y')} ({dga_optimo} °Cd)")
+                    st.error(f"🎯 Momento crítico de control: **{fecha_control.strftime('%d-%m-%Y')}** ({dga_optimo} °Cd)")
 
         with col_gauge:
             max_axis = dga_critico * 1.2
-            st.plotly_chart(
-                go.Figure().add_trace(go.Indicator(
-                    mode="gauge+number", value=dga_hoy,
-                    title={'text': "<b>TT ACUMULADO (°Cd)</b>"},
-                    gauge={'axis': {'range': [None, max_axis]},
-                           'bar': {'color': "#1e293b", 'thickness': 0.3},
-                           'steps': [{'range': [0, dga_optimo], 'color': "#4ade80"},
-                                     {'range': [dga_optimo, dga_critico], 'color': "#facc15"},
-                                     {'range': [dga_critico, max_axis], 'color': "#f87171"}],
-                           'threshold': {'line': {'color': "#2563eb", 'width': 6}, 'value': dga_7dias}}))
-                .add_annotation(x=0.5, y=-0.1, text=f"{msg_estado}<br>+7d: <b>{dga_7dias:.1f} °Cd</b>",
-                                showarrow=False, font=dict(size=13)),
-                use_container_width=True
-            )
+            st.plotly_chart(go.Figure().add_trace(go.Indicator(
+                mode="gauge+number", value=dga_hoy,
+                title={'text': "<b>TT ACUMULADO (°Cd)</b>"},
+                gauge={'axis': {'range': [None, max_axis]},
+                       'bar': {'color': "#1e293b", 'thickness': 0.3},
+                       'steps': [{'range': [0, dga_optimo], 'color': "#4ade80"},
+                                 {'range': [dga_optimo, dga_critico], 'color': "#facc15"},
+                                 {'range': [dga_critico, max_axis], 'color': "#f87171"}],
+                       'threshold': {'line': {'color': "#2563eb", 'width': 6}, 'value': dga_7dias}}))
+                .add_annotation(x=0.5, y=-0.12, text=f"{msg_estado}<br>Pronóstico +7d: <b>{dga_7dias:.1f} °Cd</b>",
+                                showarrow=False, font=dict(size=12)),
+                use_container_width=True)
 
     with tab2:
         st.header("💧 Dinámica Hídrica del Suelo")
         fig_hidrico = go.Figure()
-        fig_hidrico.add_trace(go.Bar(x=df["Fecha"], y=df["Prec"], name='Lluvia (mm)',
+        fig_hidrico.add_trace(go.Bar(x=df["Fecha"], y=df["Prec"], name='Lluvia Diaria (mm)',
                                      marker_color='#93c5fd', opacity=0.7))
         fig_hidrico.add_trace(go.Scatter(x=df["Fecha"], y=df["W_superficial"],
                                          name='Agua en Suelo (0-10cm)', mode='lines',
                                          line=dict(color='#0284c7', width=3),
                                          fill='tozeroy', fillcolor='rgba(2, 132, 199, 0.2)'))
         fig_hidrico.add_hline(y=w_max_val, line_dash="dot", line_color="#334155",
-                              annotation_text=f"Cap. Máx ({w_max_val} mm)")
-        st.plotly_chart(fig_hidrico.update_layout(height=420, hovermode="x unified"), use_container_width=True)
+                              annotation_text=f"Capacidad Máx ({w_max_val} mm)")
+        st.plotly_chart(fig_hidrico.update_layout(height=400, hovermode="x unified"), use_container_width=True)
 
     with tab3:
         st.header("📈 Validación vs Datos de Campo")
@@ -473,28 +455,29 @@ if df_meteo_raw is not None:
             fig_val.add_trace(go.Scatter(x=df_sincronizado['Fecha'], y=df_sincronizado['Sim_Acumulado']*100,
                                          mode='lines', name='Simulado Bimodal (%)',
                                          line=dict(color='#166534', width=3, dash='dash')))
-            st.plotly_chart(fig_val.update_layout(title="Curvas Acumuladas - Comparación", height=420), use_container_width=True)
+            st.plotly_chart(fig_val.update_layout(title="Curvas Acumuladas - Comparación", height=400), use_container_width=True)
         else:
-            st.info("Cargá datos de campo para ver la validación.")
+            st.info("Cargá un archivo de campo para ver la validación.")
 
     with tab4:
-        st.subheader("🧪 Curva Térmica de Emergencia")
+        st.subheader("🧪 Curva de Respuesta Térmica")
         x_temps = np.linspace(0, 45, 200)
         y_tt = [calculate_tt_scalar(t, t_base_val, t_opt_max, t_critica) for t in x_temps]
-        st.plotly_chart(go.Figure(go.Scatter(x=x_temps, y=y_tt, mode='lines', line=dict(color='#2563eb', width=4))).update_layout(height=350), use_container_width=True)
+        st.plotly_chart(go.Figure(go.Scatter(x=x_temps, y=y_tt, mode='lines', line=dict(color='#2563eb', width=4)))
+                        .update_layout(height=320, title="Tasa Térmica de Emergencia"), use_container_width=True)
 
-    # Exportar
+    # Exportar Excel con parámetros de la bimodal
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Data_Diaria')
         if df_campo is not None:
-            df_campo.to_excel(writer, index=False, sheet_name='Campo')
+            df_campo.to_excel(writer, index=False, sheet_name='Campo_Validacion')
         pd.DataFrame({
             'Parametro': ['Offset', 'Mean1', 'Mean2', 'Sigma1', 'Sigma2', 'Amp1', 'Amp2'],
             'Valor': [offset_bimodal, mean1, mean2, sigma1, sigma2, amp1, amp2]
-        }).to_excel(writer, sheet_name='Bimodal_Params', index=False)
+        }).to_excel(writer, sheet_name='Parametros_Bimodal', index=False)
     st.sidebar.download_button("📥 Descargar Reporte + Parámetros Bimodal", output.getvalue(),
-                               "PREDWEEM_Bimodal_Tunable_Pergamino.xlsx")
+                               "PREDWEEM_Bimodal_Ajustado_Pergamino.xlsx")
 
 else:
-    st.info("👋 Cargá archivos de clima y campo para comenzar. Usá los sliders de la sección 5 para ajustar la función bimodal hasta que coincida con tus datos observados.")
+    st.info("👋 Cargá archivos de clima y campo. Usá los controles de la sección 5 para ajustar la función bimodal.")
