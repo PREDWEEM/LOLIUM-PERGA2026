@@ -1,12 +1,7 @@
 # -*- coding: utf-8 -*-
 # ===============================================================
-# 🌾 PREDWEEM INTEGRAL vK4.9.16 — LOLIUM PERGAMINO 2026 (BIMODAL)
-# Actualización vK4.9.16:
-# - FUNCIÓN BIMODAL ADJUNTA: Ahora usa f(x) = 903.720·exp(...) + 583.745·exp(...)
-#   como base de simulación de emergencia (reemplaza ANN para la curva raw).
-# - Offset ajustable en sidebar para alinear picos con calendario real de Pergamino.
-# - Mantiene TODA la lógica Pergamino-specific (latencia 25d, bypass 0.75, techo 0-1, etc.).
-# - Normalización automática de la bimodal a [0,1] para compatibilidad con factores hídricos/térmicos.
+# 🌾 PREDWEEM INTEGRAL vK4.9.17 — LOLIUM PERGAMINO 2026 (BIMODAL) - CORREGIDO
+# Corrección: SyntaxError en fig_hidrico.add_trace (paréntesis extra eliminado)
 # ===============================================================
 import streamlit as st
 import numpy as np
@@ -120,16 +115,16 @@ def balance_hidrico_superficial(prec, et0, w_max=30.0, ke_suelo=0.4):
         w[i] = max(0.0, min(w_max, w[i-1] + prec[i] - evaporacion_real))
     return w
 
-# >>> ADAPTACIÓN FUNCIÓN BIMODAL (la que adjuntaste)
+# >>> FUNCIÓN BIMODAL ADJUNTA (usada para simular la emergencia)
 def calcular_emergencia_bimodal(julian_day, offset=94):
-    """Función bimodal adjunta para simular la tasa de emergencia diaria.
-    offset permite alinear los picos (x ≈ -1.412 y x ≈ 6.158) con el calendario real de Pergamino.
+    """Evalúa la función bimodal para simular tasa de emergencia diaria.
+    offset alinea los picos con el calendario de Pergamino.
     """
     x = julian_day - offset
     term1 = 903.720 * np.exp(-((x + 1.412)**2) / (2 * 2.055**2))
     term2 = 583.745 * np.exp(-((x - 6.158)**2) / (2 * 0.933**2))
     return term1 + term2
-# >>> FIN ADAPTACIÓN BIMODAL
+# >>> FIN FUNCIÓN BIMODAL
 
 class PracticalANNModel:
     def __init__(self, IW, bIW, LW, bLW):
@@ -167,7 +162,6 @@ def load_data(file_uploader, default_name):
     except: return None
 
 def sincronizar_series_flexibles(df_sim, df_campo, col_fecha, col_plm2, freq_dias=7):
-    # (sin cambios - misma función)
     fecha_min = min(df_sim["Fecha"].min(), df_campo[col_fecha].min())
     fecha_max = max(df_sim["Fecha"].max(), df_campo[col_fecha].max())
     df_grid = pd.DataFrame({'Fecha': pd.date_range(start=fecha_min, end=fecha_max, freq='D')})
@@ -193,7 +187,6 @@ def sincronizar_series_flexibles(df_sim, df_campo, col_fecha, col_plm2, freq_dia
     return df_resampled
 
 def calcular_metricas_validacion_integral(df_sync):
-    # (sin cambios)
     mask_activos = (df_sync['Campo_Relativo'] > 0) | (df_sync['Sim_Relativo'] > 0)
     df_activos = df_sync[mask_activos].copy()
     if len(df_activos) < 2:
@@ -228,10 +221,9 @@ def calcular_metricas_validacion_integral(df_sync):
     }
 
 # ---------------------------------------------------------
-# 3.5 MÓDULO OPTIMIZADOR 3D (sin cambios mayores - sigue usando ANN por ser modo dev)
+# 3.5 MÓDULO OPTIMIZADOR 3D
 # ---------------------------------------------------------
 def optimizar_parametros_hidricos_3d(df_meteo, df_campo, modelo_ann, latitud_pergamino=-33.9443, rango_ventanas=[7]):
-    # (código original del optimizador se mantiene igual)
     df = df_meteo.copy()
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     df["Julian_days"] = df["Fecha"].dt.dayofyear
@@ -286,7 +278,7 @@ def optimizar_parametros_hidricos_3d(df_meteo, df_campo, modelo_ann, latitud_per
 # ---------------------------------------------------------
 modelo_ann, cluster_model = load_models()
 
-st.title("🌾 PREDWEEM LOLIUM — PERGAMINO (BIMODAL) | lat=-33.9443 lon=-60.5745")
+st.title("🌾 PREDWEEM LOLIUM — PERGAMINO (BIMODAL) vK4.9.17 | lat=-33.9443 lon=-60.5745")
 
 with st.expander("📂 1. Datos del Lote", expanded=True):
     col_upload, col_rastrojo = st.columns(2)
@@ -327,13 +319,11 @@ with col_t1: t_base_val = st.number_input("T Base", value=2.0, step=0.5)
 with col_t2: t_opt_max = st.number_input("T Óptima Max", value=20.0, step=1.0)
 t_critica = st.sidebar.slider("T Crítica (Stop)", 26.0, 42.0, 30.0)
 
-# >>> NUEVO CONTROL PARA LA FUNCIÓN BIMODAL
 offset_bimodal = st.sidebar.number_input(
     "Offset Bimodal JD (ref)", 
     value=94, min_value=50, max_value=150, step=1,
-    help="Desplaza la función bimodal para alinear los picos con el período de emergencia real en Pergamino. Valor recomendado ≈ 94 (picos ~JD 93 y 100)."
+    help="Desplaza la función bimodal para alinear los picos con el período de emergencia real en Pergamino (~JD 93 y 100)."
 )
-# >>> FIN NUEVO CONTROL
 
 st.sidebar.markdown("**Objetivos (°Cd)**")
 dga_optimo = st.sidebar.number_input("Objetivo Control", value=600, step=10)
@@ -346,10 +336,10 @@ st.sidebar.markdown("## 📊 4. Flexibilidad Estadística")
 ventana_agrupacion = st.sidebar.slider(
     "Ventana de Validación (días)",
     min_value=1, max_value=30, value=11, step=1,
-    help="Define la Unidad de Decisión Agronómica."
+    help="Define la Unidad de Decisión Agronómica (agrupa flujos cada N días)."
 )
 
-# --- MODO DESARROLLADOR: OPTIMIZADOR 3D (sin cambios mayores) ---
+# --- MODO DESARROLLADOR ---
 with st.sidebar.expander("🛠️ Modo Dev: Optimizador 3D", expanded=False):
     st.caption("Busca la combinación perfecta de Suelo y Ventana Estadística.")
     modo_optimizador = st.radio("Dimensión de Búsqueda:", ["Física (Usa ventana actual)", "Integral (Busca ventana óptima)"])
@@ -373,9 +363,9 @@ df_meteo_raw = load_data(archivo_meteo, "meteo_daily")
 df_campo_raw = load_data(archivo_campo, "pergamino_campo")
 
 # ---------------------------------------------------------
-# 5. MOTOR DE CÁLCULO (ADAPTADO A FUNCIÓN BIMODAL)
+# 5. MOTOR DE CÁLCULO (USA FUNCIÓN BIMODAL)
 # ---------------------------------------------------------
-if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
+if df_meteo_raw is not None:
     df = df_meteo_raw.copy()
     df.columns = [c.upper().strip() for c in df.columns]
     df = df.rename(columns={'FECHA': 'Fecha', 'DATE': 'Fecha', 'TMAX': 'TMAX', 'TMIN': 'TMIN', 'PREC': 'Prec', 'LLUVIA': 'Prec'})
@@ -397,22 +387,22 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
         max_plm2 = df_campo[col_plm2].max()
         df_campo['Campo_Normalizado'] = df_campo[col_plm2] / max_plm2 if max_plm2 > 0 else 0
 
-    # >>> ADAPTACIÓN PRINCIPAL: USAR FUNCIÓN BIMODAL EN LUGAR DE ANN
+    # >>> USO DE LA FUNCIÓN BIMODAL (reemplaza ANN para la curva base)
     raw_bimodal = np.array([calcular_emergencia_bimodal(jd, offset=offset_bimodal) for jd in df["Julian_days"].values])
     max_bim = np.max(raw_bimodal) if np.max(raw_bimodal) > 0 else 1.0
     df["EMERREL_RAW"] = raw_bimodal / max_bim
     df["EMERREL"] = np.maximum(df["EMERREL_RAW"], 0.0)
-    # >>> FIN ADAPTACIÓN
+    # >>> FIN BLOQUE BIMODAL
 
     # Bloqueo de latencia temprana absoluta (Primeros 25 días)
     df.loc[df["Julian_days"] <= 25, "EMERREL"] = 0.0
 
-    # Bypass Ruptura Temprana (PERGAMINO: Limitado a 0.75)
+    # Bypass Ruptura Temprana (PERGAMINO)
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
     mask_ruptura = (df["Julian_days"] <= 110) & (df["Prec_3d"] >= umbral_choque_hidrico)
     df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75)
 
-    # Balance Hídrico Superficial + Factor Hídrico
+    # Balance Hídrico + Factor Hídrico
     df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.9443)
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
     humedad_relativa = df["W_superficial"] / w_max_val
@@ -426,12 +416,11 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
     df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
     df.loc[df["Tmedia_10d"] >= umbral_termoinhibicion, "EMERREL"] = 0.0
 
-    # PERGAMINO: Techo 0-1
+    # Techo 0-1 (Pergamino)
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
 
-    # (el resto del código de lógica de picos, métricas, gráficos, tabs, etc. permanece exactamente igual)
     fecha_hoy = pd.Timestamp.now().normalize()
     if fecha_hoy not in df['Fecha'].values: fecha_hoy = df['Fecha'].max()
 
@@ -478,12 +467,13 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
             df_alertas = df[df['EMERREL'] >= umbral_er]
             lead_time = (fecha_control - (df_alertas['Fecha'].iloc[0] if not df_alertas.empty else fecha_inicio_ventana)).days
 
-    # TRANSFORMACIÓN LOGARÍTMICA + VISUALIZACIÓN (sin cambios)
+    # TRANSFORMACIÓN LOGARÍTMICA
     c_log = 0.01
     df["EMERREL_LOG"] = np.log10(df["EMERREL"] + c_log)
     umbral_er_log = np.log10(umbral_er + c_log)
     if df_campo is not None: df_campo['Campo_Normalizado_LOG'] = np.log10(df_campo['Campo_Normalizado'] + c_log)
 
+    # MAPA DE RIESGO
     colorscale_hard = [[0.0, "green"], [0.01, "green"], [0.02, "red"], [1.0, "red"]]
     st.plotly_chart(go.Figure(data=go.Heatmap(z=[df["EMERREL"].values], x=df["Fecha"], y=["Emergencia"], colorscale=colorscale_hard, zmin=0, zmax=1, showscale=False)).update_layout(height=120, margin=dict(t=30, b=0, l=10, r=10), title="Mapa de Riesgo (Tasa Diaria)"), use_container_width=True)
 
@@ -510,7 +500,7 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
         col_main, col_gauge = st.columns([2, 1])
         with col_main:
             fig_emer = go.Figure()
-            # Sombreado de Unidades de Decisión Agronómica (sin cambios)
+            # Sombreado de Unidades de Decisión Agronómica
             fecha_inicio_grilla = df["Fecha"].min()
             fecha_fin_grilla = df["Fecha"].max()
             fecha_actual = fecha_inicio_grilla
@@ -530,7 +520,7 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
                 fig_emer.add_vline(x=fecha_control.timestamp() * 1000, line_dash="dot", line_color="red", line_width=3, annotation_text=f"Control ({dga_optimo}°Cd)", annotation_position="top left", annotation_font=dict(color="red", size=12))
                 fig_emer.add_vrect(x0=fecha_control.timestamp() * 1000, x1=(fecha_control + timedelta(days=residualidad)).timestamp() * 1000, fillcolor="blue", opacity=0.1, layer="below", line_width=0, annotation_text=f"Protección ({residualidad}d)", annotation_position="top left")
 
-            titulo_grafico = f"Dinámica de Emergencia (Función Bimodal + Modulaciones) — Unidad Decisión: {ventana_agrupacion} días"
+            titulo_grafico = f"Dinámica de Emergencia (Función Bimodal) — Unidad Decisión: {ventana_agrupacion} días"
             fig_emer.update_layout(title=titulo_grafico, yaxis_title="Log10(Emergencia + 0.01)", height=450, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
             st.plotly_chart(fig_emer, use_container_width=True)
 
@@ -566,7 +556,8 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
         st.header("💧 Dinámica Hídrica del Suelo")
         fig_hidrico = go.Figure()
         fig_hidrico.add_trace(go.Bar(x=df["Fecha"], y=df["Prec"], name='Lluvia Diaria (mm)', marker_color='#93c5fd', opacity=0.7))
-        fig_hidrico.add_trace(go.Scatter(x=df["Fecha"], y=df["W_superficial"], name='Agua en Suelo (0-10cm)', mode='lines', line=dict(color='#0284c7', width=3), fill='tozeroy', fillcolor='rgba(2, 132, 199, 0.2)')))
+        # >>> LÍNEA CORREGIDA (sin paréntesis extra)
+        fig_hidrico.add_trace(go.Scatter(x=df["Fecha"], y=df["W_superficial"], name='Agua en Suelo (0-10cm)', mode='lines', line=dict(color='#0284c7', width=3), fill='tozeroy', fillcolor='rgba(2, 132, 199, 0.2)'))
         fig_hidrico.add_hline(y=w_max_val, line_dash="dot", line_color="#334155", annotation_text=f"Capacidad Máx. ({w_max_val} mm)", annotation_position="top left")
         st.plotly_chart(fig_hidrico.update_layout(title="Precipitación vs. Retención Real de Humedad", xaxis_title="Fecha", yaxis_title="Milímetros (mm)", height=450, hovermode="x unified", legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)), use_container_width=True)
 
@@ -599,7 +590,7 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
         x_temps = np.linspace(0, 45, 200)
         st.plotly_chart(go.Figure().add_trace(go.Scatter(x=x_temps, y=[calculate_tt_scalar(t, t_base_val, t_opt_max, t_critica) for t in x_temps], mode='lines', line=dict(color='#2563eb', width=4), fill='tozeroy')), use_container_width=True)
 
-    # Exportación Excel (sin cambios)
+    # Exportación Excel
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Data_Diaria')
@@ -607,7 +598,7 @@ if df_meteo_raw is not None:   # <<< ya no requiere modelo_ann
             df_campo.to_excel(writer, index=False, sheet_name='Campo_Validacion')
             pd.DataFrame({'Métrica': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Valores > 0)', f'NSE (Flujos {ventana_agrupacion}D)', f'KGE (Flujos {ventana_agrupacion}D)', 'RMSE (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)'], 'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, ccc_acum, desfase_t50]}).to_excel(writer, sheet_name='Validacion_Campo', index=False)
         pd.DataFrame({'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Mod_Termico', 'Umbral_Termoinhibicion', 'Ventana_NSE_Dias', 'Offset_Bimodal'], 'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, mod_termico, umbral_termoinhibicion, ventana_agrupacion, offset_bimodal]}).to_excel(writer, sheet_name='Bio_Params', index=False)
-    st.sidebar.download_button("📥 Descargar Reporte Completo", output.getvalue(), "PREDWEEM_Bimodal_Pergamino_vK4.9.16.xlsx")
+    st.sidebar.download_button("📥 Descargar Reporte Completo", output.getvalue(), "PREDWEEM_Bimodal_Pergamino_vK4.9.17.xlsx")
 
 else:
-    st.info("👋 Bienvenido a PREDWEEM Bimodal. Cargue datos climáticos para comenzar la simulación con la función adjunta.")
+    st.info("👋 Bienvenido a PREDWEEM Bimodal vK4.9.17. Cargue datos climáticos para comenzar.")
