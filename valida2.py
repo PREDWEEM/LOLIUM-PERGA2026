@@ -198,7 +198,7 @@ def calcular_metricas_validacion_integral(df_sync):
 # ---------------------------------------------------------
 modelo_ann, cluster_model = load_models()
 
-st.title("🌾 PREDWEEM HÍBRIDO — ANN + Función Bimodal vK4.9.21")
+st.title("🌾 PREDWEEM PERGAMINO")
 
 with st.expander("📂 1. Datos del Lote", expanded=True):
     col_upload, col_rastrojo = st.columns(2)
@@ -269,7 +269,7 @@ bimodal_weight = st.sidebar.slider(
     "Fuerza de la Bimodal",
     min_value=0.0,
     max_value=1.0,
-    value=0.65,
+    value=0.00,
     step=0.05,
     help="0.0 = Solo usa la Red Neuronal (ANN)\n"
          "1.0 = ANN × Bimodal (máxima influencia de la forma bimodal)\n"
