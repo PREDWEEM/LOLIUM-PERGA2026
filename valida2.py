@@ -411,6 +411,43 @@ with st.sidebar.expander("🛠️ Modo Dev: Optimizador 3D", expanded=False):
 df_meteo_raw = load_data(archivo_meteo, "meteo_daily")
 df_campo_raw = load_data(archivo_campo, "pergamino_campo")
 
+
+
+def filtro_bimodal_norte(df, w_max, umbral_verano=24.0, umbral_veranito=20.0, limite_hr=0.25):
+    """
+    Induce un patrón bimodal interrumpiendo la emergencia simulada ante 
+    repuntes térmicos otoñales cortos o desecación superficial acelerada.
+    """
+    df_f = df.copy()
+    
+    # ---------------------------------------------------------
+    # 1. ESCUDO TÉRMICO DUAL
+    # ---------------------------------------------------------
+    # a) Dormición Estival Profunda (Largo plazo)
+    df_f["Tmedia_10d"] = df_f["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
+    mask_verano = df_f["Tmedia_10d"] >= umbral_verano
+    
+    # b) Termoinhibición Secundaria Rápida ("Veranito" de abril/mayo)
+    # Reacciona rápidamente a 3 días de calor post-inicio del otoño (Día Juliano > 90)
+    df_f["Tmedia_3d"] = df_f["Tmedia_aire"].rolling(window=3, min_periods=1).mean()
+    mask_veranito = (df_f["Julian_days"] > 90) & (df_f["Tmedia_3d"] >= umbral_veranito)
+    
+    # ---------------------------------------------------------
+    # 2. ESCUDO HÍDRICO ESTRICTO (Superficie)
+    # ---------------------------------------------------------
+    # Calcula la Humedad Relativa y exige un umbral más alto (ej. 25% en lugar de 20%)
+    humedad_relativa = df_f["W_superficial"] / w_max
+    mask_sequia = humedad_relativa < limite_hr
+    
+    # ---------------------------------------------------------
+    # APLICACIÓN DEL FILTRO
+    # ---------------------------------------------------------
+    # Si alguna de las tres condiciones se cumple, la emergencia se anula a 0.
+    df_f.loc[mask_verano | mask_veranito | mask_sequia, "EMERREL"] = 0.0
+    
+    return df_f
+
+
 # ---------------------------------------------------------
 # 5. MOTOR DE CÁLCULO
 # ---------------------------------------------------------
