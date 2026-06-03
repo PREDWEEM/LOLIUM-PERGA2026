@@ -3,17 +3,15 @@
 # ===============================================================
 # 🌾 PREDWEEM INTEGRAL vK4.9.15 — LOLIUM PERGAMINO 2026
 # Actualización:
-# - ADAPTACIÓN PERGAMINO: Coordenadas precisas actualizadas a LAT=-33.9443 y LON=-60.5745.
+# - ADAPTACIÓN PERGAMINO: Coordenadas precisas LAT=-33.9443 y LON=-60.5745.
 # - IDENTIDAD: PREDWEEM by GUILLERMO R. CHANTRE.
 # - LATENCIA INICIAL: Bloqueo de emergencia los primeros 25 días del año.
 # - ESPECÍFICO PERGAMINO: Bypass por choque hídrico temprano limitado a 0.75.
-# - ESPECÍFICO PERGAMINO: Filtro Bimodal integrado para capturar mesetas otoñales.
-# - ESPECÍFICO PERGAMINO: Lag estadístico de 10 días para ajustar T50.
-# - NSE FLEXIBLE (SEMANAL): Reemplazo de sincronización rígida por interpolación 
-#   continua de acumulados y remuestreo dinámico en ventanas de N-días.
-# - OPTIMIZADOR 3D: Barrido paramétrico simultáneo de W_Max, Ke y Ventana de Validación.
-# - UX VISUAL: Incorporación de la "Unidad de Decisión Agronómica" como 
-#   sombreado de fondo en el gráfico principal de dinámica.
+# - ESPECÍFICO PERGAMINO: Filtro Bimodal V2 integrado (penalización proporcional para meseta).
+# - ESPECÍFICO PERGAMINO: Lag estadístico ajustado a 8 días.
+# - NSE FLEXIBLE (SEMANAL): Remuestreo dinámico en ventanas de N-días.
+# - OPTIMIZADOR 3D: Barrido paramétrico simultáneo (W_Max, Ke, Ventana).
+# - UX VISUAL: Sombreado de fondo para Unidad de Decisión Agronómica.
 # ===============================================================
 
 import streamlit as st
@@ -246,23 +244,30 @@ def calcular_metricas_validacion_integral(df_sync):
         "CCC_Acumulado": ccc_acumulado
     }
 
-def filtro_bimodal_norte(df, w_max, umbral_verano=24.0, umbral_veranito=20.0, limite_hr=0.25):
+def filtro_bimodal_norte_v2(df, w_max, umbral_verano=24.0, umbral_veranito=20.5, limite_hr=0.22):
     """
-    Induce un patrón bimodal interrumpiendo la emergencia simulada ante 
-    repuntes térmicos otoñales cortos o desecación superficial acelerada.
+    Induce un patrón bimodal suavizado. 
+    Aplica cortes estrictos para verano y sequía profunda, pero usa una 
+    penalización proporcional para los 'veranitos' otoñales, evitando 
+    escalones artificiales en la curva acumulada.
     """
     df_f = df.copy()
     
+    # 1. DORMICIÓN ESTIVAL PROFUNDA (Corte Estricto)
     df_f["Tmedia_10d"] = df_f["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
     mask_verano = df_f["Tmedia_10d"] >= umbral_verano
+    df_f.loc[mask_verano, "EMERREL"] = 0.0
     
+    # 2. TERMOINHIBICIÓN SECUNDARIA ("Veranito" Otoñal - Proporcional)
     df_f["Tmedia_3d"] = df_f["Tmedia_aire"].rolling(window=3, min_periods=1).mean()
     mask_veranito = (df_f["Julian_days"] > 90) & (df_f["Tmedia_3d"] >= umbral_veranito)
+    df_f.loc[mask_veranito & ~mask_verano, "EMERREL"] *= 0.10 
     
+    # 3. ESTRÉS HÍDRICO SUPERFICIAL (Corte Estricto)
     humedad_relativa = df_f["W_superficial"] / w_max
     mask_sequia = humedad_relativa < limite_hr
+    df_f.loc[mask_sequia, "EMERREL"] = 0.0
     
-    df_f.loc[mask_verano | mask_veranito | mask_sequia, "EMERREL"] = 0.0
     return df_f
 
 # ---------------------------------------------------------
@@ -301,8 +306,8 @@ def optimizar_parametros_hidricos_3d(df_meteo, df_campo, modelo_ann, latitud_per
             
             df_sim["EMERREL"] = df_sim["EMERREL_RAW"] * df_sim["Hydric_Factor"]
             
-            # Aplicar filtro bimodal en el optimizador
-            df_sim = filtro_bimodal_norte(df_sim, w_max=w_max, umbral_verano=24.0, umbral_veranito=20.0, limite_hr=0.25)
+            # Aplicar filtro bimodal V2 en el optimizador
+            df_sim = filtro_bimodal_norte_v2(df_sim, w_max=w_max, umbral_verano=24.0, umbral_veranito=20.5, limite_hr=0.22)
             
             df_sim["EMERREL"] = np.clip(df_sim["EMERREL"], 0, 1.0)
             
@@ -472,23 +477,23 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
 
     # =======================================================
-    # APLICACIÓN DEL FILTRO BIMODAL (Sustituye la termoinhibición antigua)
+    # APLICACIÓN DEL FILTRO BIMODAL V2 (Penalización Proporcional)
     # =======================================================
-    df = filtro_bimodal_norte(
+    df = filtro_bimodal_norte_v2(
         df, 
         w_max=w_max_val, 
         umbral_verano=umbral_termoinhibicion, 
-        umbral_veranito=20.0, 
-        limite_hr=0.25
+        umbral_veranito=20.5, 
+        limite_hr=0.22
     )
     
-    # PERGAMINO: Techo 0-1 (Se eliminó el patrón de agotamiento estricto)
+    # PERGAMINO: Techo 0-1
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
     # =======================================================
-    # LAG DE EMERGENCIA (Retraso de 10 días cronológicos)
+    # LAG DE EMERGENCIA (Retraso de 8 días cronológicos para ajuste fino)
     # =======================================================
-    df["EMERREL"] = df["EMERREL"].shift(10).fillna(0.0)
+    df["EMERREL"] = df["EMERREL"].shift(8).fillna(0.0)
 
     df["Tmedia"] = df["Tmedia_aire"]
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
