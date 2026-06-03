@@ -28,7 +28,7 @@ except ImportError:
 # CONFIGURACIÓN INICIAL
 # ---------------------------------------------------------
 if 'arranque_fase' not in st.session_state:
-    st.set_page_config(page_title="PREDWEEM HÍBRIDO ANN+BIMODAL", layout="wide", page_icon="🌾")
+    st.set_page_config(page_title="PREDWEEM ANN", layout="wide", page_icon="🌾")
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     st.info("🚜 **Iniciando PREDWEEM Híbrido (ANN + Bimodal)...**")
     st.progress(20)
@@ -219,7 +219,7 @@ st.sidebar.image("https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/ma
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 
 umbral_er = st.sidebar.slider("Umbral Tasa Diaria", 0.001, 0.80, 0.001, 0.001)
-umbral_termoinhibicion = st.sidebar.number_input("Umbral Termoinhibición (°C)", 15.0, 35.0, 24.0, 0.5)
+umbral_termoinhibicion = st.sidebar.number_input("Umbral Termoinhibición (°C)", 15.0, 35.0, 19.0, 0.5)
 umbral_choque_hidrico = st.sidebar.slider("Choque Hídrico 3 días (mm)", 20.0, 100.0, 30.0)
 residualidad = st.sidebar.number_input("Residualidad Herbicida (días)", 0, 60, 0)
 
