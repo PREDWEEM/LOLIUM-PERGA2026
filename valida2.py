@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 # ===============================================================
-# 🌾 PREDWEEM vK4.9.20 — LOLIUM PERGAMINO + OPTIMIZADOR BIMODAL
-# Nueva función: Botón "Optimizar parámetros de la curva bimodal"
-# Usa scipy.optimize.differential_evolution para encontrar los
-# mejores parámetros que hacen coincidir simulación vs datos de campo
+# 🌾 PREDWEEM vK4.9.21 — HÍBRIDO ANN + FUNCIÓN BIMODAL
+# Arquitectura:
+#   1. Red Neuronal (ANN) genera la tasa base
+#   2. Función Bimodal actúa como modulador de forma (multiplicativo)
+#   3. Control "Fuerza de la Bimodal" para regular la influencia
+#   4. Mantiene optimizador automático y todos los filtros Pergamino
 # ===============================================================
 import streamlit as st
 import numpy as np
@@ -26,9 +28,9 @@ except ImportError:
 # CONFIGURACIÓN INICIAL
 # ---------------------------------------------------------
 if 'arranque_fase' not in st.session_state:
-    st.set_page_config(page_title="PREDWEEM + OPTIMIZADOR BIMODAL", layout="wide", page_icon="🌾")
+    st.set_page_config(page_title="PREDWEEM HÍBRIDO ANN+BIMODAL", layout="wide", page_icon="🌾")
     st.markdown("<br><br><br>", unsafe_allow_html=True)
-    st.info("🚜 **Iniciando PREDWEEM con Optimizador Automático...**")
+    st.info("🚜 **Iniciando PREDWEEM Híbrido (ANN + Bimodal)...**")
     st.progress(20)
     st.session_state.arranque_fase = 1
     time.sleep(0.1)
@@ -61,8 +63,14 @@ def set_bg_hack(main_bg_file):
 set_bg_hack("fondo_predweem_v3.png")
 
 # ---------------------------------------------------------
-# FUNCIONES AUXILIARES
+# FUNCIONES
 # ---------------------------------------------------------
+def calcular_emergencia_bimodal(julian_day, offset, mean1, mean2, sigma1, sigma2, amp1, amp2):
+    x = julian_day - offset
+    term1 = amp1 * np.exp(-((x - mean1)**2) / (2 * sigma1**2))
+    term2 = amp2 * np.exp(-((x - mean2)**2) / (2 * sigma2**2))
+    return term1 + term2
+
 def dtw_distance(a, b):
     na, nb = len(a), len(b)
     dp = np.full((na + 1, nb + 1), np.inf)
@@ -98,12 +106,6 @@ def balance_hidrico_superficial(prec, et0, w_max=30.0, ke_suelo=0.4):
         evaporacion_real = et0[i] * ke_suelo
         w[i] = max(0.0, min(w_max, w[i-1] + prec[i] - evaporacion_real))
     return w
-
-def calcular_emergencia_bimodal(julian_day, offset, mean1, mean2, sigma1, sigma2, amp1, amp2):
-    x = julian_day - offset
-    term1 = amp1 * np.exp(-((x - mean1)**2) / (2 * sigma1**2))
-    term2 = amp2 * np.exp(-((x - mean2)**2) / (2 * sigma2**2))
-    return term1 + term2
 
 class PracticalANNModel:
     def __init__(self, IW, bIW, LW, bLW):
@@ -192,72 +194,11 @@ def calcular_metricas_validacion_integral(df_sync):
             "RMSE_Acumulado": rmse_acumulado, "CCC_Acumulado": ccc_acumulado}
 
 # ---------------------------------------------------------
-# FUNCIÓN OBJETIVO PARA EL OPTIMIZADOR
-# ---------------------------------------------------------
-def objective_bimodal(params, df_meteo_full, df_campo, col_fecha, col_plm2, 
-                      w_max_val, ke_val, mod_termico, umbral_termoinhibicion,
-                      t_base_val, t_opt_max, t_critica, umbral_er,
-                      umbral_choque_hidrico, ventana_agrupacion):
-    """
-    Función objetivo que minimiza el error entre simulación y datos observados.
-    params = [offset, mean1, mean2, sigma1, sigma2, amp1, amp2]
-    """
-    offset, mean1, mean2, sigma1, sigma2, amp1, amp2 = params
-
-    df = df_meteo_full.copy()
-    df["Julian_days"] = df["Fecha"].dt.dayofyear
-    df["Tmedia_aire"] = (df["TMAX"] + df["TMIN"]) / 2
-    amplitud_termica = (df["TMAX"] - df["TMIN"]) / 2
-    df["TMAX_suelo"] = df["Tmedia_aire"] + (amplitud_termica * mod_termico)
-    df["TMIN_suelo"] = df["Tmedia_aire"] - (amplitud_termica * mod_termico)
-
-    # Calcular EMERREL con los parámetros candidatos
-    raw_bimodal = np.array([
-        calcular_emergencia_bimodal(jd, offset, mean1, mean2, sigma1, sigma2, amp1, amp2)
-        for jd in df["Julian_days"].values
-    ])
-    max_bim = np.max(raw_bimodal) if np.max(raw_bimodal) > 0 else 1.0
-    df["EMERREL"] = np.maximum(raw_bimodal / max_bim, 0.0)
-
-    # Aplicar filtros (latencia, bypass, hídrico, térmico)
-    df.loc[df["Julian_days"] <= 25, "EMERREL"] = 0.0
-    df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
-    mask_ruptura = (df["Julian_days"] <= 110) & (df["Prec_3d"] >= umbral_choque_hidrico)
-    df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75)
-
-    df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.9443)
-    df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
-    humedad_relativa = df["W_superficial"] / w_max_val
-    df["Hydric_Factor"] = 1 / (1 + np.exp(-10 * (humedad_relativa - 0.3)))
-    df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
-    df.loc[humedad_relativa < 0.20, "EMERREL"] = 0.0
-    df['Lluvia_Recarga'] = (df['Prec'] >= w_max_val).cummax()
-    df.loc[~df['Lluvia_Recarga'], "EMERREL"] = 0.0
-
-    df["Tmedia"] = df["Tmedia_aire"]
-    df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
-    df.loc[df["Tmedia_10d"] >= umbral_termoinhibicion, "EMERREL"] = 0.0
-    df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
-
-    # Calcular métricas de ajuste
-    try:
-        df_sync = sincronizar_series_flexibles(df, df_campo, col_fecha, col_plm2, freq_dias=ventana_agrupacion)
-        metricas = calcular_metricas_validacion_integral(df_sync)
-        # Queremos maximizar NSE o KGE → minimizamos el negativo
-        score = -metricas["NSE_Flujos"]
-        if np.isnan(score) or np.isinf(score):
-            score = 999
-    except:
-        score = 999
-
-    return score
-
-# ---------------------------------------------------------
 # INTERFAZ
 # ---------------------------------------------------------
 modelo_ann, cluster_model = load_models()
 
-st.title("🌾 PREDWEEM LOLIUM PERGAMINO — vK4.9.20 + OPTIMIZADOR BIMODAL")
+st.title("🌾 PREDWEEM HÍBRIDO — ANN + Función Bimodal vK4.9.21")
 
 with st.expander("📂 1. Datos del Lote", expanded=True):
     col_upload, col_rastrojo = st.columns(2)
@@ -299,9 +240,9 @@ st.sidebar.divider()
 st.sidebar.markdown("## 📊 4. Flexibilidad Estadística")
 ventana_agrupacion = st.sidebar.slider("Ventana de Validación (días)", 1, 30, 11, 1)
 
-# ===================== CONTROLES MANUALES DE LA BIMODAL =====================
+# ===================== PARÁMETROS DE LA BIMODAL =====================
 st.sidebar.divider()
-st.sidebar.markdown("## 🔧 5. AJUSTE MANUAL DE FUNCIÓN BIMODAL")
+st.sidebar.markdown("## 🔧 5. PARÁMETROS DE LA FUNCIÓN BIMODAL")
 
 offset_bimodal = st.sidebar.number_input("Offset (días julianos)", min_value=50, max_value=150, value=94, step=1)
 col_m1, col_m2 = st.sidebar.columns(2)
@@ -320,105 +261,30 @@ with col_a1:
 with col_a2:
     amp2 = st.sidebar.number_input("Amplitud Pico 2", min_value=100.0, max_value=3000.0, value=580.0, step=10.0)
 
-st.sidebar.caption("💡 Ajustá manualmente o usá el optimizador automático de abajo.")
+# ===================== CONTROL HÍBRIDO =====================
+st.sidebar.divider()
+st.sidebar.markdown("## ⚖️ 6. CONTROL HÍBRIDO ANN + BIMODAL")
+
+bimodal_weight = st.sidebar.slider(
+    "Fuerza de la Bimodal",
+    min_value=0.0,
+    max_value=1.0,
+    value=0.65,
+    step=0.05,
+    help="0.0 = Solo usa la Red Neuronal (ANN)\n"
+         "1.0 = ANN × Bimodal (máxima influencia de la forma bimodal)\n"
+         "0.5-0.8 suele ser un buen punto de partida"
+)
+
+st.sidebar.caption("La bimodal multiplica la salida de la ANN para forzar el patrón de forma.")
 
 df_meteo_raw = load_data(archivo_meteo, "meteo_daily")
 df_campo_raw = load_data(archivo_campo, "pergamino_campo")
 
 # ---------------------------------------------------------
-# OPTIMIZADOR AUTOMÁTICO
+# MOTOR DE CÁLCULO HÍBRIDO
 # ---------------------------------------------------------
-st.sidebar.divider()
-st.sidebar.markdown("## 🚀 6. OPTIMIZADOR AUTOMÁTICO")
-
-if not SCIPY_AVAILABLE:
-    st.sidebar.error("scipy no está disponible en este entorno. No se puede optimizar automáticamente.")
-else:
-    if st.sidebar.button("🔍 Optimizar parámetros de la curva bimodal", type="primary"):
-        if df_meteo_raw is None or df_campo_raw is None:
-            st.sidebar.error("Necesitás cargar archivos de Clima y Campo para optimizar.")
-        else:
-            with st.spinner("Optimizando parámetros... Esto puede tardar 20-60 segundos."):
-                # Preparar datos
-                df_meteo_opt = df_meteo_raw.copy()
-                df_meteo_opt.columns = [c.upper().strip() for c in df_meteo_opt.columns]
-                df_meteo_opt = df_meteo_opt.rename(columns={'FECHA': 'Fecha', 'DATE': 'Fecha', 'TMAX': 'TMAX', 'TMIN': 'TMIN', 'PREC': 'Prec', 'LLUVIA': 'Prec'})
-                df_meteo_opt['Fecha'] = pd.to_datetime(df_meteo_opt['Fecha'])
-                df_meteo_opt = df_meteo_opt.dropna(subset=["Fecha", "TMAX", "TMIN", "Prec"]).sort_values("Fecha").reset_index(drop=True)
-
-                df_campo_opt = df_campo_raw.copy()
-                col_fecha_opt = 'FECHA' if 'FECHA' in df_campo_opt.columns else df_campo_opt.columns[0]
-                col_plm2_opt = 'PLM2' if 'PLM2' in df_campo_opt.columns else df_campo_opt.columns[1]
-                df_campo_opt[col_fecha_opt] = pd.to_datetime(df_campo_opt[col_fecha_opt])
-
-                # Bounds para los 7 parámetros
-                bounds = [
-                    (60, 130),      # offset
-                    (-30, 50),      # mean1
-                    (-20, 60),      # mean2
-                    (3.0, 35.0),    # sigma1
-                    (2.0, 30.0),    # sigma2
-                    (200, 2500),    # amp1
-                    (100, 2000),    # amp2
-                ]
-
-                # Ejecutar optimización
-                result = differential_evolution(
-                    objective_bimodal,
-                    bounds,
-                    args=(df_meteo_opt, df_campo_opt, col_fecha_opt, col_plm2_opt,
-                          w_max_val, ke_val, mod_termico, umbral_termoinhibicion,
-                          t_base_val, t_opt_max, t_critica, umbral_er,
-                          umbral_choque_hidrico, ventana_agrupacion),
-                    popsize=12,
-                    mutation=0.7,
-                    recombination=0.8,
-                    tol=0.01,
-                    workers=1,
-                    updating='immediate',
-                    disp=False
-                )
-
-                best_params = result.x
-                best_score = -result.fun   # porque minimizamos -NSE
-
-                # Guardar en session_state para que se actualicen los number_input
-                st.session_state['best_offset'] = round(best_params[0], 1)
-                st.session_state['best_mean1'] = round(best_params[1], 2)
-                st.session_state['best_mean2'] = round(best_params[2], 2)
-                st.session_state['best_sigma1'] = round(best_params[3], 2)
-                st.session_state['best_sigma2'] = round(best_params[4], 2)
-                st.session_state['best_amp1'] = round(best_params[5], 1)
-                st.session_state['best_amp2'] = round(best_params[6], 1)
-                st.session_state['best_nse'] = round(best_score, 4)
-
-                st.success(f"✅ Optimización completada. Mejor NSE encontrado: **{best_score:.4f}**")
-                st.balloons()
-
-# Si hay parámetros optimizados guardados, mostrarlos y ofrecer aplicarlos
-if 'best_offset' in st.session_state:
-    st.sidebar.success("Parámetros optimizados encontrados:")
-    st.sidebar.write(f"**Offset:** {st.session_state['best_offset']}")
-    st.sidebar.write(f"**Mean1 / Mean2:** {st.session_state['best_mean1']} / {st.session_state['best_mean2']}")
-    st.sidebar.write(f"**Sigma1 / Sigma2:** {st.session_state['best_sigma1']} / {st.session_state['best_sigma2']}")
-    st.sidebar.write(f"**Amp1 / Amp2:** {st.session_state['best_amp1']} / {st.session_state['best_amp2']}")
-    st.sidebar.write(f"**NSE logrado:** {st.session_state.get('best_nse', 'N/A')}")
-
-    if st.sidebar.button("Aplicar estos parámetros al modelo"):
-        # Actualizar los valores en los number_input redefiniéndolos con los valores optimizados
-        offset_bimodal = st.session_state['best_offset']
-        mean1 = st.session_state['best_mean1']
-        mean2 = st.session_state['best_mean2']
-        sigma1 = st.session_state['best_sigma1']
-        sigma2 = st.session_state['best_sigma2']
-        amp1 = st.session_state['best_amp1']
-        amp2 = st.session_state['best_amp2']
-        st.rerun()
-
-# ---------------------------------------------------------
-# MOTOR DE CÁLCULO PRINCIPAL
-# ---------------------------------------------------------
-if df_meteo_raw is not None:
+if df_meteo_raw is not None and modelo_ann is not None:
     df = df_meteo_raw.copy()
     df.columns = [c.upper().strip() for c in df.columns]
     df = df.rename(columns={'FECHA': 'Fecha', 'DATE': 'Fecha', 'TMAX': 'TMAX', 'TMIN': 'TMIN', 'PREC': 'Prec', 'LLUVIA': 'Prec'})
@@ -440,17 +306,28 @@ if df_meteo_raw is not None:
         max_plm2 = df_campo[col_plm2].max() or 1
         df_campo['Campo_Normalizado'] = df_campo[col_plm2] / max_plm2
 
-    # >>> CÁLCULO CON PARÁMETROS ACTUALES (manuales o aplicados del optimizador)
+    # === 1. PREDICCIÓN DE LA RED NEURONAL ===
+    X = df[["Julian_days", "TMAX_suelo", "TMIN_suelo", "Prec"]].to_numpy(float)
+    emerrel_ann, _ = modelo_ann.predict(X)
+    emerrel_ann = np.maximum(emerrel_ann, 0.0)
+
+    # === 2. FUNCIÓN BIMODAL (normalizada) ===
     raw_bimodal = np.array([
         calcular_emergencia_bimodal(jd, offset_bimodal, mean1, mean2, sigma1, sigma2, amp1, amp2)
         for jd in df["Julian_days"].values
     ])
     max_bim = np.max(raw_bimodal) if np.max(raw_bimodal) > 0 else 1.0
-    df["EMERREL"] = np.maximum(raw_bimodal / max_bim, 0.0)
-    # >>> FIN
+    bimodal_shape = raw_bimodal / max_bim
 
-    # Filtros habituales
+    # === 3. HÍBRIDO: ANN × Bimodal ===
+    # bimodal_weight = 0 → solo ANN
+    # bimodal_weight = 1 → ANN * Bimodal (máxima restricción de forma)
+    emerrel_raw = emerrel_ann * (bimodal_shape ** bimodal_weight)
+    df["EMERREL"] = np.maximum(emerrel_raw, 0.0)
+
+    # === 4. FILTROS PERGAMINO (latencia, hídrico, térmico, etc.) ===
     df.loc[df["Julian_days"] <= 25, "EMERREL"] = 0.0
+
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
     mask_ruptura = (df["Julian_days"] <= 110) & (df["Prec_3d"] >= umbral_choque_hidrico)
     df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75)
@@ -471,7 +348,7 @@ if df_meteo_raw is not None:
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
 
-    # Métricas y gráficos (versión simplificada pero funcional)
+    # Métricas y lógica de picos
     fecha_hoy = pd.Timestamp.now().normalize()
     if fecha_hoy not in df['Fecha'].values: fecha_hoy = df['Fecha'].max()
 
@@ -509,7 +386,7 @@ if df_meteo_raw is not None:
                                   colorscale=colorscale_hard, zmin=0, zmax=1, showscale=False))
                     .update_layout(height=85, margin=dict(t=10, b=0, l=5, r=5)), use_container_width=True)
 
-    tab1, tab2, tab3 = st.tabs(["📊 MONITOR + OPTIMIZACIÓN", "💧 HIDRICO", "📈 VALIDACIÓN"])
+    tab1, tab2, tab3 = st.tabs(["📊 MONITOR HÍBRIDO", "💧 HIDRICO", "📈 VALIDACIÓN"])
 
     with tab1:
         if df_campo is not None:
@@ -533,7 +410,7 @@ if df_meteo_raw is not None:
                 fecha_actual = siguiente
 
             fig_emer.add_trace(go.Scatter(x=df["Fecha"], y=df["EMERREL_LOG"], mode='lines',
-                                          name='Simulado Bimodal (Log)', line=dict(color='#166534', width=2.5),
+                                          name='Híbrido ANN×Bimodal (Log)', line=dict(color='#166534', width=2.5),
                                           fill='tozeroy', fillcolor='rgba(22, 101, 52, 0.1)'))
             fig_emer.add_hline(y=umbral_er_log, line_dash="dash", line_color="orange", annotation_text=f"Umbral {umbral_er}")
 
@@ -547,7 +424,7 @@ if df_meteo_raw is not None:
                 fig_emer.add_vline(x=fecha_control.timestamp()*1000, line_dash="dot", line_color="red", line_width=3,
                                    annotation_text=f"Control {dga_optimo}°Cd")
 
-            fig_emer.update_layout(title=f"Dinámica de Emergencia (Bimodal + Optimizador) — Ventana {ventana_agrupacion}d",
+            fig_emer.update_layout(title=f"Dinámica Híbrida (ANN × Bimodal, fuerza={bimodal_weight:.2f}) — Ventana {ventana_agrupacion}d",
                                    yaxis_title="Log10(Emergencia + 0.01)", height=450, hovermode="x unified",
                                    legend=dict(orientation="h", y=1.02, x=1))
             st.plotly_chart(fig_emer, use_container_width=True)
@@ -590,9 +467,9 @@ if df_meteo_raw is not None:
                                          mode='markers+lines', name='Observado (%)',
                                          marker=dict(color='#dc2626', size=8, symbol='diamond')))
             fig_val.add_trace(go.Scatter(x=df_sincronizado['Fecha'], y=df_sincronizado['Sim_Acumulado']*100,
-                                         mode='lines', name='Simulado Bimodal (%)',
+                                         mode='lines', name='Simulado Híbrido (%)',
                                          line=dict(color='#166534', width=3, dash='dash')))
-            st.plotly_chart(fig_val.update_layout(title="Curvas Acumuladas", height=380), use_container_width=True)
+            st.plotly_chart(fig_val.update_layout(title="Curvas Acumuladas - Híbrido ANN×Bimodal", height=380), use_container_width=True)
         else:
             st.info("Cargá datos de campo para ver la validación.")
 
@@ -603,10 +480,10 @@ if df_meteo_raw is not None:
         if df_campo is not None:
             df_campo.to_excel(writer, index=False, sheet_name='Campo')
         pd.DataFrame({
-            'Parametro': ['Offset', 'Mean1', 'Mean2', 'Sigma1', 'Sigma2', 'Amp1', 'Amp2'],
-            'Valor': [offset_bimodal, mean1, mean2, sigma1, sigma2, amp1, amp2]
-        }).to_excel(writer, sheet_name='Parametros_Bimodal_Usados', index=False)
-    st.sidebar.download_button("📥 Descargar Reporte", output.getvalue(), "PREDWEEM_Bimodal_Optimizado.xlsx")
+            'Parametro': ['Offset', 'Mean1', 'Mean2', 'Sigma1', 'Sigma2', 'Amp1', 'Amp2', 'Bimodal_Weight'],
+            'Valor': [offset_bimodal, mean1, mean2, sigma1, sigma2, amp1, amp2, bimodal_weight]
+        }).to_excel(writer, sheet_name='Config_Hibrida', index=False)
+    st.sidebar.download_button("📥 Descargar Reporte Híbrido", output.getvalue(), "PREDWEEM_Hibrido_ANN_Bimodal.xlsx")
 
 else:
-    st.info("👋 Cargá archivos de clima y campo. Luego podés ajustar manualmente o usar el **Optimizador Automático** en la sección 6 del sidebar.")
+    st.info("👋 Cargá archivos de clima y campo + asegurate de que los modelos ANN estén disponibles.")
