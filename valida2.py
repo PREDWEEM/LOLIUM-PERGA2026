@@ -511,13 +511,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # PERGAMINO: Techo 0-1
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
-    # =======================================================
-    # LAG DE EMERGENCIA (Ajuste fino a 7 días)
-    # =======================================================
-    df["EMERREL"] = df["EMERREL"].shift(7).fillna(0.0)
-    
-    
-
+     
     # =======================================================
     # LAG DE EMERGENCIA (Retraso de 8 días cronológicos para ajuste fino)
     # =======================================================
