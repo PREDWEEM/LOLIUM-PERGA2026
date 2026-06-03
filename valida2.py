@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 # ===============================================================
 # 🌾 PREDWEEM INTEGRAL vK4.9.15 — LOLIUM PERGAMINO 2026
@@ -6,7 +7,8 @@
 # - IDENTIDAD: PREDWEEM by GUILLERMO R. CHANTRE.
 # - LATENCIA INICIAL: Bloqueo de emergencia los primeros 25 días del año.
 # - ESPECÍFICO PERGAMINO: Bypass por choque hídrico temprano limitado a 0.75.
-# - ESPECÍFICO PERGAMINO: Techo 0-1 (Patrón de agotamiento eliminado).
+# - ESPECÍFICO PERGAMINO: Filtro Bimodal integrado para capturar mesetas otoñales.
+# - ESPECÍFICO PERGAMINO: Lag estadístico de 10 días para ajustar T50.
 # - NSE FLEXIBLE (SEMANAL): Reemplazo de sincronización rígida por interpolación 
 #   continua de acumulados y remuestreo dinámico en ventanas de N-días.
 # - OPTIMIZADOR 3D: Barrido paramétrico simultáneo de W_Max, Ke y Ventana de Validación.
@@ -244,6 +246,25 @@ def calcular_metricas_validacion_integral(df_sync):
         "CCC_Acumulado": ccc_acumulado
     }
 
+def filtro_bimodal_norte(df, w_max, umbral_verano=24.0, umbral_veranito=20.0, limite_hr=0.25):
+    """
+    Induce un patrón bimodal interrumpiendo la emergencia simulada ante 
+    repuntes térmicos otoñales cortos o desecación superficial acelerada.
+    """
+    df_f = df.copy()
+    
+    df_f["Tmedia_10d"] = df_f["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
+    mask_verano = df_f["Tmedia_10d"] >= umbral_verano
+    
+    df_f["Tmedia_3d"] = df_f["Tmedia_aire"].rolling(window=3, min_periods=1).mean()
+    mask_veranito = (df_f["Julian_days"] > 90) & (df_f["Tmedia_3d"] >= umbral_veranito)
+    
+    humedad_relativa = df_f["W_superficial"] / w_max
+    mask_sequia = humedad_relativa < limite_hr
+    
+    df_f.loc[mask_verano | mask_veranito | mask_sequia, "EMERREL"] = 0.0
+    return df_f
+
 # ---------------------------------------------------------
 # 3.5 MÓDULO OPTIMIZADOR 3D (HÍDRICO + VENTANA) PERGAMINO
 # ---------------------------------------------------------
@@ -252,7 +273,6 @@ def optimizar_parametros_hidricos_3d(df_meteo, df_campo, modelo_ann, latitud_per
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     df["Julian_days"] = df["Fecha"].dt.dayofyear
     
-    # Simulación Térmica Básica
     df["Tmedia_aire"] = (df["TMAX"] + df["TMIN"]) / 2
     amplitud_termica = (df["TMAX"] - df["TMIN"]) / 2
     df["TMAX_suelo"] = df["Tmedia_aire"] + (amplitud_termica * 0.90)
@@ -273,8 +293,6 @@ def optimizar_parametros_hidricos_3d(df_meteo, df_campo, modelo_ann, latitud_per
         for ke in rango_ke:
             df_sim = df.copy()
             df_sim["EMERREL_RAW"] = np.maximum(emerrel_raw, 0.0)
-            
-            # Latencia Inicial Absoluta
             df_sim.loc[df_sim["Julian_days"] <= 25, "EMERREL_RAW"] = 0.0
             
             df_sim["W_superficial"] = balance_hidrico_superficial(df_sim["Prec"].values, df_sim["ET0"].values, w_max=w_max, ke_suelo=ke)
@@ -282,14 +300,10 @@ def optimizar_parametros_hidricos_3d(df_meteo, df_campo, modelo_ann, latitud_per
             df_sim["Hydric_Factor"] = 1 / (1 + np.exp(-10 * (humedad_relativa - 0.3)))
             
             df_sim["EMERREL"] = df_sim["EMERREL_RAW"] * df_sim["Hydric_Factor"]
-            df_sim.loc[humedad_relativa < 0.20, "EMERREL"] = 0.0
-            df_sim['Lluvia_Recarga'] = (df_sim['Prec'] >= w_max).cummax()
-            df_sim.loc[~df_sim['Lluvia_Recarga'], "EMERREL"] = 0.0
             
-            df_sim["Tmedia_10d"] = df_sim["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
-            df_sim.loc[df_sim["Tmedia_10d"] >= 24.0, "EMERREL"] = 0.0
+            # Aplicar filtro bimodal en el optimizador
+            df_sim = filtro_bimodal_norte(df_sim, w_max=w_max, umbral_verano=24.0, umbral_veranito=20.0, limite_hr=0.25)
             
-            # ESPECÍFICO PERGAMINO: Techo 0-1 sin patrón de agotamiento
             df_sim["EMERREL"] = np.clip(df_sim["EMERREL"], 0, 1.0)
             
             for v_dias in rango_ventanas:
@@ -411,43 +425,6 @@ with st.sidebar.expander("🛠️ Modo Dev: Optimizador 3D", expanded=False):
 df_meteo_raw = load_data(archivo_meteo, "meteo_daily")
 df_campo_raw = load_data(archivo_campo, "pergamino_campo")
 
-
-
-def filtro_bimodal_norte(df, w_max, umbral_verano=24.0, umbral_veranito=20.0, limite_hr=0.25):
-    """
-    Induce un patrón bimodal interrumpiendo la emergencia simulada ante 
-    repuntes térmicos otoñales cortos o desecación superficial acelerada.
-    """
-    df_f = df.copy()
-    
-    # ---------------------------------------------------------
-    # 1. ESCUDO TÉRMICO DUAL
-    # ---------------------------------------------------------
-    # a) Dormición Estival Profunda (Largo plazo)
-    df_f["Tmedia_10d"] = df_f["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
-    mask_verano = df_f["Tmedia_10d"] >= umbral_verano
-    
-    # b) Termoinhibición Secundaria Rápida ("Veranito" de abril/mayo)
-    # Reacciona rápidamente a 3 días de calor post-inicio del otoño (Día Juliano > 90)
-    df_f["Tmedia_3d"] = df_f["Tmedia_aire"].rolling(window=3, min_periods=1).mean()
-    mask_veranito = (df_f["Julian_days"] > 90) & (df_f["Tmedia_3d"] >= umbral_veranito)
-    
-    # ---------------------------------------------------------
-    # 2. ESCUDO HÍDRICO ESTRICTO (Superficie)
-    # ---------------------------------------------------------
-    # Calcula la Humedad Relativa y exige un umbral más alto (ej. 25% en lugar de 20%)
-    humedad_relativa = df_f["W_superficial"] / w_max
-    mask_sequia = humedad_relativa < limite_hr
-    
-    # ---------------------------------------------------------
-    # APLICACIÓN DEL FILTRO
-    # ---------------------------------------------------------
-    # Si alguna de las tres condiciones se cumple, la emergencia se anula a 0.
-    df_f.loc[mask_verano | mask_veranito | mask_sequia, "EMERREL"] = 0.0
-    
-    return df_f
-
-
 # ---------------------------------------------------------
 # 5. MOTOR DE CÁLCULO
 # ---------------------------------------------------------
@@ -494,18 +471,28 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["Hydric_Factor"] = 1 / (1 + np.exp(-10 * (humedad_relativa - 0.3)))
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
 
-    df.loc[humedad_relativa < 0.20, "EMERREL"] = 0.0
-    df['Lluvia_Recarga'] = (df['Prec'] >= w_max_val).cummax()
-    df.loc[~df['Lluvia_Recarga'], "EMERREL"] = 0.0
-
-    df["Tmedia"] = df["Tmedia_aire"]
-    df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
-    df.loc[df["Tmedia_10d"] >= umbral_termoinhibicion, "EMERREL"] = 0.0
-
+    # =======================================================
+    # APLICACIÓN DEL FILTRO BIMODAL (Sustituye la termoinhibición antigua)
+    # =======================================================
+    df = filtro_bimodal_norte(
+        df, 
+        w_max=w_max_val, 
+        umbral_verano=umbral_termoinhibicion, 
+        umbral_veranito=20.0, 
+        limite_hr=0.25
+    )
+    
     # PERGAMINO: Techo 0-1 (Se eliminó el patrón de agotamiento estricto)
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
+    # =======================================================
+    # LAG DE EMERGENCIA (Retraso de 10 días cronológicos)
+    # =======================================================
+    df["EMERREL"] = df["EMERREL"].shift(10).fillna(0.0)
+
+    df["Tmedia"] = df["Tmedia_aire"]
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
+    
     fecha_hoy = pd.Timestamp.now().normalize()
     if fecha_hoy not in df['Fecha'].values: fecha_hoy = df['Fecha'].max()
     
@@ -525,17 +512,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
         dga_7dias = dga_hoy + df.iloc[idx_hoy + 1: idx_hoy + 8]["DG"].sum() if idx_hoy + 8 <= len(df) else dga_hoy
         msg_estado = f"Pico detectado el {fecha_inicio_ventana.strftime('%d/%m')}"
         dias_stress = len(df_desde_pico[df_desde_pico["Tmedia"] > t_opt_max])
-
-    
-
-
-    # =======================================================
-    # NUEVO: LAG DE EMERGENCIA (Retraso de 10 días calendario)
-    # =======================================================
-    df["EMERREL"] = df["EMERREL"].shift(15).fillna(0.0)
-    # =======================================================
-
-    df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
     
     # Inicialización de métricas robustas
     pearson_r, nse_flujos, kge_flujos, rmse_acum, ccc_acum = 0.0, 0.0, 0.0, 0.0, 0.0
