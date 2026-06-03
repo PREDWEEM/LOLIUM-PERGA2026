@@ -495,7 +495,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     # =======================================================
     # NUEVO: LAG DE EMERGENCIA (Retraso de 10 días calendario)
     # =======================================================
-    df["EMERREL"] = df["EMERREL"].shift(10).fillna(0.0)
+    df["EMERREL"] = df["EMERREL"].shift(15).fillna(0.0)
     # =======================================================
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
