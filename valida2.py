@@ -244,29 +244,49 @@ def calcular_metricas_validacion_integral(df_sync):
         "CCC_Acumulado": ccc_acumulado
     }
 
-def filtro_bimodal_norte_v2(df, w_max, umbral_verano=24.0, umbral_veranito=20.5, limite_hr=0.22):
+def filtro_bimodal_pergamino_v3(df, w_max, umbral_verano=24.0, umbral_veranito=19.5, limite_hr=0.25):
     """
-    Induce un patrón bimodal suavizado. 
-    Aplica cortes estrictos para verano y sequía profunda, pero usa una 
-    penalización proporcional para los 'veranitos' otoñales, evitando 
-    escalones artificiales en la curva acumulada.
+    Simula el patrón bimodal exacto de Pergamino incorporando:
+    1. Termoinhibición estival y secundaria.
+    2. Estrés hídrico.
+    3. NUEVO: Agotamiento de Cohorte (Período Refractario temporal post-pico).
     """
     df_f = df.copy()
     
-    # 1. DORMICIÓN ESTIVAL PROFUNDA (Corte Estricto)
+    # ---------------------------------------------------------
+    # 1. DORMICIÓN ESTIVAL (Corte estricto)
+    # ---------------------------------------------------------
     df_f["Tmedia_10d"] = df_f["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
     mask_verano = df_f["Tmedia_10d"] >= umbral_verano
     df_f.loc[mask_verano, "EMERREL"] = 0.0
     
-    # 2. TERMOINHIBICIÓN SECUNDARIA ("Veranito" Otoñal - Proporcional)
-    df_f["Tmedia_3d"] = df_f["Tmedia_aire"].rolling(window=3, min_periods=1).mean()
-    mask_veranito = (df_f["Julian_days"] > 90) & (df_f["Tmedia_3d"] >= umbral_veranito)
-    df_f.loc[mask_veranito & ~mask_verano, "EMERREL"] *= 0.10 
+    # ---------------------------------------------------------
+    # 2. TERMOINHIBICIÓN SECUNDARIA ("Veranito" más sensible)
+    # ---------------------------------------------------------
+    # Se ajusta la ventana a 5 días y el umbral a 19.5°C para detectar 
+    # mejor el freno térmico sutil de principios de mayo en el norte.
+    df_f["Tmedia_5d"] = df_f["Tmedia_aire"].rolling(window=5, min_periods=1).mean()
+    mask_veranito = (df_f["Julian_days"] > 90) & (df_f["Tmedia_5d"] >= umbral_veranito)
+    df_f.loc[mask_veranito & ~mask_verano, "EMERREL"] *= 0.05 
     
-    # 3. ESTRÉS HÍDRICO SUPERFICIAL (Corte Estricto)
+    # ---------------------------------------------------------
+    # 3. ESTRÉS HÍDRICO SUPERFICIAL 
+    # ---------------------------------------------------------
     humedad_relativa = df_f["W_superficial"] / w_max
     mask_sequia = humedad_relativa < limite_hr
     df_f.loc[mask_sequia, "EMERREL"] = 0.0
+    
+    # ---------------------------------------------------------
+    # 4. AGOTAMIENTO DE COHORTE (Efecto Refractario)
+    # ---------------------------------------------------------
+    # Si el modelo predijo una emergencia masiva reciente (ej. > 40% en 12 días),
+    # frena drásticamente la tasa de los días siguientes, simulando que 
+    # la capa superficial se quedó sin semillas listas para germinar.
+    df_f["Emergencia_Acum_12d"] = df_f["EMERREL"].rolling(window=12, min_periods=1).sum()
+    mask_agotamiento = df_f["Emergencia_Acum_12d"] > 0.40
+    
+    # Penaliza los nacimientos durante el período de agotamiento (reduce 85%)
+    df_f.loc[mask_agotamiento, "EMERREL"] *= 0.15
     
     return df_f
 
@@ -476,19 +496,27 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["Hydric_Factor"] = 1 / (1 + np.exp(-10 * (humedad_relativa - 0.3)))
     df["EMERREL"] = df["EMERREL"] * df["Hydric_Factor"]
 
+    
     # =======================================================
-    # APLICACIÓN DEL FILTRO BIMODAL V2 (Penalización Proporcional)
+    # APLICACIÓN DEL FILTRO BIMODAL V3 (Con Agotamiento)
     # =======================================================
-    df = filtro_bimodal_norte_v2(
+    df = filtro_bimodal_pergamino_v3(
         df, 
         w_max=w_max_val, 
         umbral_verano=umbral_termoinhibicion, 
-        umbral_veranito=20.5, 
-        limite_hr=0.22
+        umbral_veranito=19.5,   # Freno más sensible para mayo
+        limite_hr=0.25          # Exige 25% de agua para evitar micropulsos
     )
     
     # PERGAMINO: Techo 0-1
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
+
+    # =======================================================
+    # LAG DE EMERGENCIA (Ajuste fino a 7 días)
+    # =======================================================
+    df["EMERREL"] = df["EMERREL"].shift(7).fillna(0.0)
+    
+    
 
     # =======================================================
     # LAG DE EMERGENCIA (Retraso de 8 días cronológicos para ajuste fino)
