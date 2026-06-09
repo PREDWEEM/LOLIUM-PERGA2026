@@ -13,7 +13,7 @@
 # - UX VISUAL: Incorporación de la "Unidad de Decisión Agronómica" como 
 #   sombreado de fondo en el gráfico principal de dinámica.
 # - NUEVO: Sombreado de Ventana de Aplicación (600 - 800 °Cd) y línea límite.
-# - NUEVO: Carga automática de datos climáticos y de validación a campo.
+# - NUEVO: Carga automática de clima y opción manual habilitada para Campo.
 # ===============================================================
 
 import streamlit as st
@@ -154,9 +154,10 @@ def load_models():
         st.error(f"Error cargando modelos: {e}")
         return None, None
 
-def load_data(default_name):
-    # Ya no usamos file_uploader. Busca local o en GitHub directamente.
-    if (BASE / f"{default_name}.csv").exists():
+def load_data(file_uploader, default_name):
+    if file_uploader:
+        return pd.read_excel(file_uploader) if file_uploader.name.endswith((".xlsx", ".xls")) else pd.read_csv(file_uploader)
+    elif (BASE / f"{default_name}.csv").exists():
         return pd.read_csv(BASE / f"{default_name}.csv")
     elif (BASE / f"{default_name}.xlsx").exists():
         return pd.read_excel(BASE / f"{default_name}.xlsx")
@@ -326,23 +327,14 @@ st.title("🌾 PREDWEEM LOLIUM — PERGAMINO (BA) lat=-33.9443 lon=-60.5745")
 with st.expander("📂 1. Datos del Lote", expanded=True):
     col_upload, col_rastrojo = st.columns(2)
     
-    # --- MODIFICADO: CARGA AUTOMÁTICA DE DATOS ---
     with col_upload:
-        st.markdown("#### ☁️ Sincronización de Datos")
-        st.info("Obteniendo datos climáticos y de campo automáticamente desde el repositorio de Pergamino...")
+        st.markdown("#### ☁️ Datos Climáticos")
+        st.info("Carga automática de clima activada.")
+        df_meteo_raw = load_data(None, "meteo_daily")
         
-        df_meteo_raw = load_data("meteo_daily")
-        df_campo_raw = load_data("pergamino_campo")
-        
-        if df_meteo_raw is not None:
-            st.success("✅ Datos climáticos sincronizados correctamente.")
-        else:
-            st.error("❌ Error al cargar datos climáticos. Verifica la ruta o tu conexión.")
-            
-        if df_campo_raw is not None:
-            st.success("✅ Datos de validación a campo sincronizados.")
-        else:
-            st.warning("⚠️ No se encontraron datos de validación a campo.")
+        st.markdown("#### 🌱 Datos de Validación")
+        archivo_campo = st.file_uploader("Opcional: Cargar archivo de Campo", type=["xlsx", "csv"])
+        df_campo_raw = load_data(archivo_campo, "pergamino_campo")
         
     with col_rastrojo:
         with st.container(border=True):
@@ -422,6 +414,7 @@ with st.sidebar.expander("🛠️ Modo Dev: Optimizador 3D", expanded=False):
             st.dataframe(tabla_optima.head(15))
         else:
             st.error("Se requieren datos de Clima y Campo.")
+
 
 # ---------------------------------------------------------
 # 5. MOTOR DE CÁLCULO
