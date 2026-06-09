@@ -409,8 +409,7 @@ with st.sidebar.expander("🛠️ Modo Dev: Optimizador 3D", expanded=False):
         else:
             st.error("Se requieren datos de Clima y Campo.")
 
-df_meteo_raw = load_data(archivo_meteo, "meteo_daily")
-df_campo_raw = load_data(archivo_campo, "pergamino_campo")
+df_meteo_raw = load_data(archivo_meteo, "pergamino_campo")
 
 # ---------------------------------------------------------
 # 5. MOTOR DE CÁLCULO
@@ -688,15 +687,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
         st.subheader("🧪 Curva de Respuesta Fisiológica")
         x_temps = np.linspace(0, 45, 200)
         st.plotly_chart(go.Figure().add_trace(go.Scatter(x=x_temps, y=[calculate_tt_scalar(t, t_base_val, t_opt_max, t_critica) for t in x_temps], mode='lines', line=dict(color='#2563eb', width=4), fill='tozeroy')), use_container_width=True)
-        
-        st.markdown("---")
-        st.markdown("### Referencia Fenológica")
-        st.markdown("A continuación, un esquema referencial sobre los estadios de crecimiento:")
-        # Se agrega una búsqueda y el tag de la imagen para aportar contexto visual sobre la fenología del crecimiento (ej. trigo/Lolium) 
-        st.markdown("
-
-[Image of weed seedling phenological stages]
-")
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
