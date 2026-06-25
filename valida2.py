@@ -11,6 +11,7 @@
 #   Intervalo Variable (Event-to-Event), apto para frecuencias de monitoreo de 7 a 21 días.
 # - OPTIMIZADOR 2D: Barrido de parámetros de suelo (W_Max y Ke) adaptado a ventanas reales de campo.
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
+# - SIMULACIÓN: Escenario fijo de incremento térmico (+1°C) a partir del 21 de mayo.
 # ===============================================================
 
 import streamlit as st
@@ -360,7 +361,7 @@ with st.expander("📂 1. Datos del Lote", expanded=True):
             st.markdown(html_card, unsafe_allow_html=True)
 
 # =========================================================================
-# 🛠️ ASIGNACIONES DE ALCANCE GLOBAL (Elimina NameErrors)
+# 🛠️ ASIGNACIONES DE ALCANCE GLOBAL
 # =========================================================================
 df_meteo_raw = load_data(None, "meteo_daily")
 df_campo_raw = load_data(archivo_campo, "pergamino_campo")
@@ -370,7 +371,7 @@ st.sidebar.image("https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/ma
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 umbral_er = st.sidebar.slider("Umbral Tasa Diaria", 0.001, 0.80, 0.001)
 umbral_termoinhibicion = st.sidebar.number_input("Umbral Termoinhibición (°C)", 15.0, 35.0, 19.0, 0.5)
-umbral_choque_hidrico = st.sidebar.slider("Choque Hídrico 3 días (mm)", 20.0, 100.0, 30.0)
+umbral_choque_hidrico = st.sidebar.slider("Choque Hídrico 3 días (mm)", 10.0, 100.0, 15.0)
 residualidad = st.sidebar.number_input("Residualidad Herbicida (días)", 0, 60, 0)
 col_t1, col_t2 = st.sidebar.columns(2)
 with col_t1: t_base_val = st.number_input("T Base", value=2.0, step=0.5)
@@ -387,6 +388,11 @@ w_max_val = st.sidebar.number_input("Cap. de Campo Superficial (mm)", value=30.0
 st.sidebar.divider()
 st.sidebar.markdown("## 📊 4. Estado de Validación")
 st.sidebar.info("🔬 **Modo Event-to-Event Activado**: Las ventanas de validación mapean dinámicamente el calendario real de tus datos de campo (7-21 días), protegiendo la varianza de flujos de Lolium.")
+
+# --- SECCIÓN: MÓDULO DE SIMULACIÓN (FIJO) ---
+st.sidebar.divider()
+st.sidebar.markdown("## 🌤️ 5. Escenario Climático")
+st.sidebar.info("🌡️ **Escenario Fijo Activo:** Incremento automático de **+1°C** aplicado a las temperaturas máximas y mínimas a partir del **21 de Mayo**.")
 
 # --- MODO DESARROLLADOR: CALIBRADOR 2D ---
 with st.sidebar.expander("🛠️ Modo Dev: Calibrador Bio-Físico 2D", expanded=False):
@@ -419,6 +425,16 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df = df.rename(columns={'FECHA': 'Fecha', 'DATE': 'Fecha', 'TMAX': 'TMAX', 'TMIN': 'TMIN', 'PREC': 'Prec', 'LLUVIA': 'Prec'})
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     df = df.dropna(subset=["Fecha", "TMAX", "TMIN", "Prec"]).sort_values("Fecha").reset_index(drop=True)
+    
+    # --- APLICACIÓN DEL ESCENARIO FIJO (+1°C desde el 21 de Mayo) ---
+    año_actual = df['Fecha'].dt.year.max()
+    fecha_corte = pd.Timestamp(year=año_actual, month=5, day=21)
+    mask_escenario = df['Fecha'] >= fecha_corte
+    
+    # Incremento térmico absoluto fijo de +1°C
+    df.loc[mask_escenario, 'TMAX'] += 1.0
+    df.loc[mask_escenario, 'TMIN'] += 1.0
+
     df["Julian_days"] = df["Fecha"].dt.dayofyear
 
     df["Tmedia_aire"] = (df["TMAX"] + df["TMIN"]) / 2
