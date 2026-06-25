@@ -11,7 +11,7 @@
 #   Intervalo Variable (Event-to-Event), apto para frecuencias de monitoreo de 7 a 21 días.
 # - OPTIMIZADOR 2D: Barrido de parámetros de suelo (W_Max y Ke) adaptado a ventanas reales de campo.
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
-# - SIMULACIÓN: Escenarios de incremento térmico e hídrico a partir del 21 de mayo.
+# - SIMULACIÓN: Escenarios de incremento térmico e hídrico a partir del 1 de marzo.
 # ===============================================================
 
 import streamlit as st
@@ -392,7 +392,7 @@ st.sidebar.info("🔬 **Modo Event-to-Event Activado**: Las ventanas de validaci
 # --- NUEVA SECCIÓN: MÓDULO DE SIMULACIÓN DE ESCENARIOS ---
 st.sidebar.divider()
 st.sidebar.markdown("## 🌤️ 5. Simulación de Escenarios")
-simular_clima = st.sidebar.checkbox("Modificar Clima desde el 21 de Mayo", value=False, help="Permite crear escenarios hipotéticos subiendo la temperatura y la precipitación a partir de la fecha indicada.")
+simular_clima = st.sidebar.checkbox("Modificar Clima desde el 1 de Marzo", value=False, help="Permite crear escenarios hipotéticos subiendo la temperatura y la precipitación a partir de la fecha indicada.")
 if simular_clima:
     delta_temp = st.sidebar.number_input("Aumento de Temperatura (°C)", min_value=0.0, max_value=10.0, value=2.0, step=0.5, help="Se suma a las TMAX y TMIN reales.")
     delta_prec_pct = st.sidebar.slider("Aumento de Lluvia (%)", min_value=0, max_value=200, value=20, step=5, help="Incrementa porcentualmente la lluvia solo en los días donde ya hubo o habrá precipitaciones.")
@@ -436,7 +436,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     if simular_clima:
         # Define el inicio del escenario (Año actual, asumiendo datos 2026 en curso)
         año_actual = df['Fecha'].dt.year.max()
-        fecha_corte = pd.Timestamp(year=año_actual, month=5, day=21)
+        fecha_corte = pd.Timestamp(year=año_actual, month=3, day=1)
         mask_escenario = df['Fecha'] >= fecha_corte
         
         # Incremento térmico absoluto
