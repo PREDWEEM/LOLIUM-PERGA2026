@@ -11,7 +11,7 @@
 #   Intervalo Variable (Event-to-Event), apto para frecuencias de monitoreo de 7 a 21 días.
 # - OPTIMIZADOR 2D: Barrido de parámetros de suelo (W_Max y Ke) adaptado a ventanas reales de campo.
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
-# - SIMULACIÓN: Escenarios de incremento térmico e hídrico a partir del 21 de mayo.
+# - SIMULACIÓN: Escenario fijo de incremento térmico (+1°C) a partir del 21 de mayo.
 # ===============================================================
 
 import streamlit as st
@@ -371,7 +371,7 @@ st.sidebar.image("https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/ma
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 umbral_er = st.sidebar.slider("Umbral Tasa Diaria", 0.001, 0.80, 0.001)
 umbral_termoinhibicion = st.sidebar.number_input("Umbral Termoinhibición (°C)", 15.0, 35.0, 19.0, 0.5)
-umbral_choque_hidrico = st.sidebar.slider("Choque Hídrico 3 días (mm)", 20.0, 100.0, 30.0)
+umbral_choque_hidrico = st.sidebar.slider("Choque Hídrico 3 días (mm)", 10.0, 100.0, 15.0)
 residualidad = st.sidebar.number_input("Residualidad Herbicida (días)", 0, 60, 0)
 col_t1, col_t2 = st.sidebar.columns(2)
 with col_t1: t_base_val = st.number_input("T Base", value=2.0, step=0.5)
@@ -389,16 +389,10 @@ st.sidebar.divider()
 st.sidebar.markdown("## 📊 4. Estado de Validación")
 st.sidebar.info("🔬 **Modo Event-to-Event Activado**: Las ventanas de validación mapean dinámicamente el calendario real de tus datos de campo (7-21 días), protegiendo la varianza de flujos de Lolium.")
 
-# --- NUEVA SECCIÓN: MÓDULO DE SIMULACIÓN DE ESCENARIOS ---
+# --- SECCIÓN: MÓDULO DE SIMULACIÓN (FIJO) ---
 st.sidebar.divider()
-st.sidebar.markdown("## 🌤️ 5. Simulación de Escenarios")
-simular_clima = st.sidebar.checkbox("Modificar Clima desde el 21 de Mayo", value=False, help="Permite crear escenarios hipotéticos subiendo la temperatura y la precipitación a partir de la fecha indicada.")
-if simular_clima:
-    delta_temp = st.sidebar.number_input("Aumento de Temperatura (°C)", min_value=0.0, max_value=10.0, value=2.0, step=0.5, help="Se suma a las TMAX y TMIN reales.")
-    delta_prec_pct = st.sidebar.slider("Aumento de Lluvia (%)", min_value=0, max_value=200, value=20, step=5, help="Incrementa porcentualmente la lluvia solo en los días donde ya hubo o habrá precipitaciones.")
-else:
-    delta_temp = 0.0
-    delta_prec_pct = 0.0
+st.sidebar.markdown("## 🌤️ 5. Escenario Climático")
+st.sidebar.info("🌡️ **Escenario Fijo Activo:** Incremento automático de **+1°C** aplicado a las temperaturas máximas y mínimas a partir del **21 de Mayo**.")
 
 # --- MODO DESARROLLADOR: CALIBRADOR 2D ---
 with st.sidebar.expander("🛠️ Modo Dev: Calibrador Bio-Físico 2D", expanded=False):
@@ -432,19 +426,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     df = df.dropna(subset=["Fecha", "TMAX", "TMIN", "Prec"]).sort_values("Fecha").reset_index(drop=True)
     
-    # --- APLICACIÓN DEL ESCENARIO SIMULADO ---
-    if simular_clima:
-        # Define el inicio del escenario (Año actual, asumiendo datos 2026 en curso)
-        año_actual = df['Fecha'].dt.year.max()
-        fecha_corte = pd.Timestamp(year=año_actual, month=5, day=21)
-        mask_escenario = df['Fecha'] >= fecha_corte
-        
-        # Incremento térmico absoluto
-        df.loc[mask_escenario, 'TMAX'] += delta_temp
-        df.loc[mask_escenario, 'TMIN'] += delta_temp
-        
-        # Incremento hídrico porcentual (para preservar días secos reales)
-        df.loc[mask_escenario, 'Prec'] *= (1 + (delta_prec_pct / 100.0))
+    # --- APLICACIÓN DEL ESCENARIO FIJO (+1°C desde el 21 de Mayo) ---
+    año_actual = df['Fecha'].dt.year.max()
+    fecha_corte = pd.Timestamp(year=año_actual, month=5, day=21)
+    mask_escenario = df['Fecha'] >= fecha_corte
+    
+    # Incremento térmico absoluto fijo de +1°C
+    df.loc[mask_escenario, 'TMAX'] += 1.0
+    df.loc[mask_escenario, 'TMIN'] += 1.0
 
     df["Julian_days"] = df["Fecha"].dt.dayofyear
 
