@@ -10,7 +10,7 @@
 # - VALIDACIÓN POR EVENTO REAL: Incorporación del método de Integración Dinámica por
 #   Intervalo Variable (Event-to-Event), apto para frecuencias de monitoreo de 7 a 21 días.
 # - OPTIMIZADOR 2D: Barrido de parámetros de suelo (W_Max y Ke) adaptado a ventanas reales de campo.
-# - FIABILIDAD OPERATIVA: Métricas Categóricas Integradas (POD, FAR, CSI) para evaluar detección.
+# - COINCIDENCIA OPERATIVA: Métricas de acuerdo por intervalo de muestreo (Exactitud y F1-Score).
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
 # - SIMULACIÓN: Escenario fijo de incremento térmico (+1°C) a partir del 21 de mayo.
 # ===============================================================
@@ -214,7 +214,7 @@ def calcular_metricas_validacion_integral(df_sync, umbral_deteccion=0.05):
     if df_sync.empty or len(df_sync) < 2:
         return {"Pearson_Flujos": 0.0, "NSE_Flujos": 0.0, "KGE_Flujos": 0.0, 
                 "RMSE_Acumulado": 0.0, "CCC_Acumulado": 0.0, "R2_Acumulado": 0.0,
-                "POD_Deteccion": 0.0, "FAR_Alarmas": 0.0, "CSI_Fiabilidad": 0.0}
+                "Exactitud_Global": 0.0, "F1_Score_Coincidencia": 0.0, "Falsos_Positivos": 0}
 
     mask_activos = (df_sync['Campo_Relativo'] > 0) | (df_sync['Sim_Relativo'] > 0)
     df_activos = df_sync[mask_activos].copy()
@@ -253,17 +253,21 @@ def calcular_metricas_validacion_integral(df_sync, umbral_deteccion=0.05):
     ss_tot_ac = np.sum((obs_acum - mean_obs_ac)**2)
     r2_acumulado = 1 - (ss_res_ac / ss_tot_ac) if ss_tot_ac > 0 else 0.0
     
-    # --- MÉTRICAS CATEGÓRICAS DE DETECCIÓN (Fiabilidad) ---
+    # --- MÉTRICAS DE COINCIDENCIA POR INTERVALO (AGREEMENT) ---
     obs_eventos = df_sync['Campo_Relativo'] > umbral_deteccion
     sim_eventos = df_sync['Sim_Relativo'] > umbral_deteccion
 
-    hits = np.sum(obs_eventos & sim_eventos)
-    misses = np.sum(obs_eventos & ~sim_eventos)
-    false_alarms = np.sum(~obs_eventos & sim_eventos)
+    hits = np.sum(obs_eventos & sim_eventos)                 
+    misses = np.sum(obs_eventos & ~sim_eventos)              
+    false_alarms = np.sum(~obs_eventos & sim_eventos)        
+    correct_negatives = np.sum(~obs_eventos & ~sim_eventos)  
 
-    pod = hits / (hits + misses) if (hits + misses) > 0 else 0.0
-    far = false_alarms / (hits + false_alarms) if (hits + false_alarms) > 0 else 0.0
-    csi = hits / (hits + misses + false_alarms) if (hits + misses + false_alarms) > 0 else 0.0
+    total_intervalos = len(df_sync)
+
+    exactitud = (hits + correct_negatives) / total_intervalos if total_intervalos > 0 else 0.0
+    precision = hits / (hits + false_alarms) if (hits + false_alarms) > 0 else 0.0
+    recall = hits / (hits + misses) if (hits + misses) > 0 else 0.0
+    f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
     
     return {
         "Pearson_Flujos": pearson_r, 
@@ -272,9 +276,9 @@ def calcular_metricas_validacion_integral(df_sync, umbral_deteccion=0.05):
         "RMSE_Acumulado": rmse_acumulado, 
         "CCC_Acumulado": ccc_acumulado,
         "R2_Acumulado": r2_acumulado,
-        "POD_Deteccion": pod,
-        "FAR_Alarmas": far,
-        "CSI_Fiabilidad": csi
+        "Exactitud_Global": exactitud,
+        "F1_Score_Coincidencia": f1_score,
+        "Falsos_Positivos": int(false_alarms)
     }
 
 # ---------------------------------------------------------
@@ -328,7 +332,7 @@ def optimizar_parametros_hidricos_2d(df_meteo, df_campo, modelo_ann, latitud_per
             resultados.append({
                 "W_Max (mm)": w_max,
                 "Ke_Suelo": round(ke, 2),
-                "CSI (Fiabilidad)": metricas["CSI_Fiabilidad"],
+                "F1-Score": metricas["F1_Score_Coincidencia"],
                 "NSE (Flujos Reales)": metricas["NSE_Flujos"],
                 "KGE": metricas["KGE_Flujos"],
                 "CCC (Acumulado)": metricas["CCC_Acumulado"],
@@ -337,8 +341,8 @@ def optimizar_parametros_hidricos_2d(df_meteo, df_campo, modelo_ann, latitud_per
             })
             
     df_resultados = pd.DataFrame(resultados)
-    # Ordenar priorizando el CSI, seguido del NSE
-    return df_resultados.sort_values(by=["CSI (Fiabilidad)", "NSE (Flujos Reales)"], ascending=[False, False]).reset_index(drop=True)
+    # Ordenar priorizando el F1-Score, seguido del NSE
+    return df_resultados.sort_values(by=["F1-Score", "NSE (Flujos Reales)"], ascending=[False, False]).reset_index(drop=True)
 
 # ---------------------------------------------------------
 # 4. INTERFAZ PRINCIPAL Y CARGA DE LOTE
@@ -532,7 +536,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
 
     # Sincronización Event-to-Event por Intervalos Reales
     pearson_r, nse_flujos, kge_flujos, rmse_acum, ccc_acum, r2_acum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-    pod_deteccion, far_alarmas, csi_fiabilidad = 0.0, 0.0, 0.0
+    exactitud_global, f1_score_coincidencia, falsos_positivos = 0.0, 0.0, 0
     pec, peak_lag, lead_time, desfase_t50 = 0.0, 0, 0, 0
     df_sincronizado = pd.DataFrame()
 
@@ -547,9 +551,9 @@ if df_meteo_raw is not None and modelo_ann is not None:
             rmse_acum = metricas_robustas["RMSE_Acumulado"]
             ccc_acum = metricas_robustas["CCC_Acumulado"]
             r2_acum = metricas_robustas["R2_Acumulado"]
-            pod_deteccion = metricas_robustas["POD_Deteccion"]
-            far_alarmas = metricas_robustas["FAR_Alarmas"]
-            csi_fiabilidad = metricas_robustas["CSI_Fiabilidad"]
+            exactitud_global = metricas_robustas["Exactitud_Global"]
+            f1_score_coincidencia = metricas_robustas["F1_Score_Coincidencia"]
+            falsos_positivos = metricas_robustas["Falsos_Positivos"]
             
             tot_plm2 = df_campo[col_plm2].sum()
             if tot_plm2 > 0:
@@ -592,11 +596,11 @@ if df_meteo_raw is not None and modelo_ann is not None:
             c4.metric("Error (RMSE)", f"{rmse_acum:.3f}", "Desvío Acumulado", delta_color="inverse")
             c5.metric("Desfase (T50)", f"{desfase_t50:+d} días", "Sincronía Operativa", delta_color="inverse" if desfase_t50 > 0 else "normal" if desfase_t50 < 0 else "off")
 
-            st.markdown("<p class='metric-header' style='margin-top:15px;'>🎯 FIABILIDAD OPERATIVA DE DETECCIÓN (Categórica)</p>", unsafe_allow_html=True)
+            st.markdown("<p class='metric-header' style='margin-top:15px;'>🎯 COINCIDENCIA POR INTERVALO DE MUESTREO</p>", unsafe_allow_html=True)
             d1, d2, d3 = st.columns(3)
-            d1.metric("Índice de Éxito (CSI)", f"{csi_fiabilidad:.3f}", "Fiabilidad Global")
-            d2.metric("Prob. Detección (POD)", f"{pod_deteccion:.3f}", "Sensibilidad")
-            d3.metric("Tasa Falsa Alarma (FAR)", f"{far_alarmas:.3f}", "Falsos Positivos", delta_color="inverse")
+            d1.metric("F1-Score (Coincidencia)", f"{f1_score_coincidencia:.3f}", "Fidelidad en ventanas activas")
+            d2.metric("Exactitud Global", f"{exactitud_global * 100:.1f}%", "Acuerdo total (Invierno + Verano)")
+            d3.metric("Falsos Positivos", f"{falsos_positivos}", "Intervalos simulados sin contraparte real", delta_color="inverse")
     
             if fecha_control:
                 st.markdown("<p class='metric-header' style='margin-top:15px;'>⚙️ LOGÍSTICA DE CONTROL EN LOTE</p>", unsafe_allow_html=True)
@@ -733,8 +737,8 @@ if df_meteo_raw is not None and modelo_ann is not None:
         if df_campo is not None and not df_sincronizado.empty:
             df_campo.to_excel(writer, index=False, sheet_name='Campo_Validacion')
             pd.DataFrame({
-                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)', 'POD (Probabilidad Deteccion)', 'FAR (Tasa Falsas Alarmas)', 'CSI (Indice Exito Crítico)'], 
-                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50, pod_deteccion, far_alarmas, csi_fiabilidad]
+                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)', 'F1-Score (Coincidencia)', 'Exactitud Global', 'Falsos Positivos'], 
+                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50, f1_score_coincidencia, exactitud_global, falsos_positivos]
             }).to_excel(writer, sheet_name='Validacion_Campo', index=False)
         pd.DataFrame({'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Mod_Termico', 'Umbral_Termoinhibicion'], 'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, mod_termico, umbral_termoinhibicion]}).to_excel(writer, sheet_name='Bio_Params', index=False)
 
