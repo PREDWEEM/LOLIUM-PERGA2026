@@ -10,7 +10,8 @@
 # - VALIDACIÓN POR EVENTO REAL: Incorporación del método de Integración Dinámica por
 #   Intervalo Variable (Event-to-Event), apto para frecuencias de monitoreo de 7 a 21 días.
 # - OPTIMIZADOR 2D: Barrido de parámetros de suelo (W_Max y Ke) adaptado a ventanas reales de campo.
-# - COINCIDENCIA OPERATIVA: Métricas de acuerdo por intervalo de muestreo (Exactitud y F1-Score).
+# - COINCIDENCIA OPERATIVA: Métricas F1-Score y Exactitud Global.
+# - TRANSPARENCIA: Matriz de Confusión interactiva integrada en el Dashboard.
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
 # - SIMULACIÓN: Escenario fijo de incremento térmico (+1°C) a partir del 21 de mayo.
 # ===============================================================
@@ -214,7 +215,8 @@ def calcular_metricas_validacion_integral(df_sync, umbral_deteccion=0.05):
     if df_sync.empty or len(df_sync) < 2:
         return {"Pearson_Flujos": 0.0, "NSE_Flujos": 0.0, "KGE_Flujos": 0.0, 
                 "RMSE_Acumulado": 0.0, "CCC_Acumulado": 0.0, "R2_Acumulado": 0.0,
-                "Exactitud_Global": 0.0, "F1_Score_Coincidencia": 0.0, "Falsos_Positivos": 0}
+                "Exactitud_Global": 0.0, "F1_Score_Coincidencia": 0.0, 
+                "Hits": 0, "Misses": 0, "Falsos_Positivos": 0, "Correctos_Negativos": 0}
 
     mask_activos = (df_sync['Campo_Relativo'] > 0) | (df_sync['Sim_Relativo'] > 0)
     df_activos = df_sync[mask_activos].copy()
@@ -278,7 +280,10 @@ def calcular_metricas_validacion_integral(df_sync, umbral_deteccion=0.05):
         "R2_Acumulado": r2_acumulado,
         "Exactitud_Global": exactitud,
         "F1_Score_Coincidencia": f1_score,
-        "Falsos_Positivos": int(false_alarms)
+        "Hits": int(hits),
+        "Misses": int(misses),
+        "Falsos_Positivos": int(false_alarms),
+        "Correctos_Negativos": int(correct_negatives)
     }
 
 # ---------------------------------------------------------
@@ -323,7 +328,6 @@ def optimizar_parametros_hidricos_2d(df_meteo, df_campo, modelo_ann, latitud_per
             df_sim["Tmedia_10d"] = df_sim["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
             df_sim.loc[df_sim["Tmedia_10d"] >= 24.0, "EMERREL"] = 0.0
             
-            # Específico Pergamino: Techo estricto 0-1
             df_sim["EMERREL"] = np.clip(df_sim["EMERREL"], 0, 1.0)
             
             df_sync = sincronizar_intervalos_variables(df_sim, df_campo, col_fecha, col_plm2)
@@ -341,7 +345,6 @@ def optimizar_parametros_hidricos_2d(df_meteo, df_campo, modelo_ann, latitud_per
             })
             
     df_resultados = pd.DataFrame(resultados)
-    # Ordenar priorizando el F1-Score, seguido del NSE
     return df_resultados.sort_values(by=["F1-Score", "NSE (Flujos Reales)"], ascending=[False, False]).reset_index(drop=True)
 
 # ---------------------------------------------------------
@@ -450,12 +453,10 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     df = df.dropna(subset=["Fecha", "TMAX", "TMIN", "Prec"]).sort_values("Fecha").reset_index(drop=True)
     
-    # --- APLICACIÓN DEL ESCENARIO FIJO (+1°C desde el 21 de Mayo) ---
     año_actual = df['Fecha'].dt.year.max()
     fecha_corte = pd.Timestamp(year=año_actual, month=5, day=21)
     mask_escenario = df['Fecha'] >= fecha_corte
     
-    # Incremento térmico absoluto fijo de +1°C
     df.loc[mask_escenario, 'TMAX'] += 1.0
     df.loc[mask_escenario, 'TMIN'] += 1.0
 
@@ -480,15 +481,12 @@ if df_meteo_raw is not None and modelo_ann is not None:
     emerrel_raw, _ = modelo_ann.predict(X)
     df["EMERREL"] = np.maximum(emerrel_raw, 0.0)
 
-    # Bloqueo de latencia temprana absoluta (Primeros 25 días del año)
     df.loc[df["Julian_days"] <= 25, "EMERREL"] = 0.0
 
-    # Bypass Ruptura Temprana (PERGAMINO: Limitado a un techo de 0.75)
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
     mask_ruptura = (df["Julian_days"] <= 110) & (df["Prec_3d"] >= umbral_choque_hidrico)
     df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75)
 
-    # Balance Hídrico Superficial (Pergamino: Lat=-33.9443)
     df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.9443)
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
     humedad_relativa = df["W_superficial"] / w_max_val
@@ -503,7 +501,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
     df.loc[df["Tmedia_10d"] >= umbral_termoinhibicion, "EMERREL"] = 0.0
 
-    # PERGAMINO: Techo estricto 0-1 sin patrón de agotamiento estricto
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
@@ -520,11 +517,9 @@ if df_meteo_raw is not None and modelo_ann is not None:
         df_desde_pico = df[df["Fecha"] >= fecha_inicio_ventana].copy()
         df_desde_pico["DGA_cum"] = df_desde_pico["DG"].cumsum()
         
-        # Fecha de Control
         df_control = df_desde_pico[df_desde_pico["DGA_cum"] >= dga_optimo]
         if not df_control.empty: fecha_control = df_control.iloc[0]["Fecha"]
         
-        # Fecha Límite (800 °Cd)
         df_limite = df_desde_pico[df_desde_pico["DGA_cum"] >= dga_critico]
         if not df_limite.empty: fecha_limite = df_limite.iloc[0]["Fecha"]
         
@@ -534,9 +529,10 @@ if df_meteo_raw is not None and modelo_ann is not None:
         msg_estado = f"Pico detectado el {fecha_inicio_ventana.strftime('%d/%m')}"
         dias_stress = len(df_desde_pico[df_desde_pico["Tmedia"] > t_opt_max])
 
-    # Sincronización Event-to-Event por Intervalos Reales
+    # Variables globales para métricas y matriz
     pearson_r, nse_flujos, kge_flujos, rmse_acum, ccc_acum, r2_acum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-    exactitud_global, f1_score_coincidencia, falsos_positivos = 0.0, 0.0, 0
+    exactitud_global, f1_score_coincidencia = 0.0, 0.0
+    hits_val, misses_val, falsos_pos_val, correctos_neg_val = 0, 0, 0, 0
     pec, peak_lag, lead_time, desfase_t50 = 0.0, 0, 0, 0
     df_sincronizado = pd.DataFrame()
 
@@ -553,7 +549,12 @@ if df_meteo_raw is not None and modelo_ann is not None:
             r2_acum = metricas_robustas["R2_Acumulado"]
             exactitud_global = metricas_robustas["Exactitud_Global"]
             f1_score_coincidencia = metricas_robustas["F1_Score_Coincidencia"]
-            falsos_positivos = metricas_robustas["Falsos_Positivos"]
+            
+            # Matriz de Confusión
+            hits_val = metricas_robustas["Hits"]
+            misses_val = metricas_robustas["Misses"]
+            falsos_pos_val = metricas_robustas["Falsos_Positivos"]
+            correctos_neg_val = metricas_robustas["Correctos_Negativos"]
             
             tot_plm2 = df_campo[col_plm2].sum()
             if tot_plm2 > 0:
@@ -573,13 +574,11 @@ if df_meteo_raw is not None and modelo_ann is not None:
             df_alertas = df[df['EMERREL'] >= umbral_er]
             lead_time = (fecha_control - (df_alertas['Fecha'].iloc[0] if not df_alertas.empty else fecha_inicio_ventana)).days
 
-    # Transformación Logarítmica Analítica
     c_log = 0.01
     df["EMERREL_LOG"] = np.log10(df["EMERREL"] + c_log)
     umbral_er_log = np.log10(umbral_er + c_log)
     if df_campo is not None: df_campo['Campo_Normalizado_LOG'] = np.log10(df_campo['Campo_Normalizado'] + c_log)
 
-    # VISUALIZACIÓN FRONT-END
     colorscale_hard = [[0.0, "green"], [0.01, "green"], [0.02, "red"], [1.0, "red"]]
     st.plotly_chart(go.Figure(data=go.Heatmap(z=[df["EMERREL"].values], x=df["Fecha"], y=["Emergencia"], colorscale=colorscale_hard, zmin=0, zmax=1, showscale=False)).update_layout(height=120, margin=dict(t=30, b=0, l=10, r=10), title="Mapa de Riesgo Temporal (Tasa Diaria Pergamino)"), use_container_width=True)
 
@@ -600,7 +599,32 @@ if df_meteo_raw is not None and modelo_ann is not None:
             d1, d2, d3 = st.columns(3)
             d1.metric("F1-Score (Coincidencia)", f"{f1_score_coincidencia:.3f}", "Fidelidad en ventanas activas")
             d2.metric("Exactitud Global", f"{exactitud_global * 100:.1f}%", "Acuerdo total (Invierno + Verano)")
-            d3.metric("Falsos Positivos", f"{falsos_positivos}", "Intervalos simulados sin contraparte real", delta_color="inverse")
+            d3.metric("Falsos Positivos", f"{falsos_pos_val}", "Intervalos simulados sin contraparte real", delta_color="inverse")
+            
+            # --- TABLA HTML: MATRIZ DE CONFUSIÓN ---
+            html_cm = f"""
+            <div style="background-color:#ffffff; padding:15px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border:1px solid #e2e8f0; margin-top:15px;">
+                <p style="color:#1e293b; font-weight:bold; margin-top:0; margin-bottom:10px;">🧩 Matriz de Confusión (Intervalos de Monitoreo)</p>
+                <table style="width:100%; text-align:center; border-collapse: collapse; font-family:sans-serif;">
+                    <tr>
+                        <th style="border-bottom:2px solid #e2e8f0; padding:10px; color:#475569; width:34%;">Realidad ⬇ \ Simulación ➡</th>
+                        <th style="border-bottom:2px solid #e2e8f0; padding:10px; background-color:#eff6ff; color:#1e3a8a; width:33%;">🚨 Modelo Predice FLUJO</th>
+                        <th style="border-bottom:2px solid #e2e8f0; padding:10px; background-color:#f8fafc; color:#475569; width:33%;">💤 Modelo Predice INACTIVO</th>
+                    </tr>
+                    <tr>
+                        <td style="border-bottom:1px solid #e2e8f0; padding:10px; font-weight:bold; color:#166534; background-color:#f0fdf4;">🌱 Campo: HUBO Flujo</td>
+                        <td style="border-bottom:1px solid #e2e8f0; padding:10px; background-color:#dcfce7; font-size:1.1em; font-weight:bold; color:#166534;">{hits_val} <span style="font-size:0.8em; font-weight:normal;">(Hits / Coincidencia)</span></td>
+                        <td style="border-bottom:1px solid #e2e8f0; padding:10px; background-color:#fee2e2; font-size:1.1em; font-weight:bold; color:#991b1b;">{misses_val} <span style="font-size:0.8em; font-weight:normal;">(Omisiones)</span></td>
+                    </tr>
+                    <tr>
+                        <td style="padding:10px; font-weight:bold; color:#475569; background-color:#f8fafc;">🛑 Campo: SIN Flujo</td>
+                        <td style="padding:10px; background-color:#fee2e2; font-size:1.1em; font-weight:bold; color:#991b1b;">{falsos_pos_val} <span style="font-size:0.8em; font-weight:normal;">(Falsas Alarmas)</span></td>
+                        <td style="padding:10px; background-color:#dcfce7; font-size:1.1em; font-weight:bold; color:#166534;">{correctos_neg_val} <span style="font-size:0.8em; font-weight:normal;">(Correctos Negativos)</span></td>
+                    </tr>
+                </table>
+            </div>
+            """
+            st.markdown(html_cm, unsafe_allow_html=True)
     
             if fecha_control:
                 st.markdown("<p class='metric-header' style='margin-top:15px;'>⚙️ LOGÍSTICA DE CONTROL EN LOTE</p>", unsafe_allow_html=True)
@@ -615,7 +639,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
         with col_main:
             fig_emer = go.Figure()
             
-            # --- SOMBREADO DINÁMICO BASADO EN FECHAS REALES DE MONITOREO ---
             if df_campo is not None:
                 fechas_reales_lote = df_campo[col_fecha].sort_values().tolist()
                 for i in range(1, len(fechas_reales_lote), 2):
@@ -730,15 +753,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
         x_temps = np.linspace(0, 45, 200)
         st.plotly_chart(go.Figure().add_trace(go.Scatter(x=x_temps, y=[calculate_tt_scalar(t, t_base_val, t_opt_max, t_critica) for t in x_temps], mode='lines', line=dict(color='#2563eb', width=4), fill='tozeroy')), use_container_width=True)
 
-    # REPORTE EN EXCEL
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Data_Diaria')
         if df_campo is not None and not df_sincronizado.empty:
             df_campo.to_excel(writer, index=False, sheet_name='Campo_Validacion')
             pd.DataFrame({
-                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)', 'F1-Score (Coincidencia)', 'Exactitud Global', 'Falsos Positivos'], 
-                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50, f1_score_coincidencia, exactitud_global, falsos_positivos]
+                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)', 'F1-Score (Coincidencia)', 'Exactitud Global', 'Hits (Aciertos)', 'Misses (Omisiones)', 'Falsos Positivos', 'Correctos Negativos'], 
+                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50, f1_score_coincidencia, exactitud_global, hits_val, misses_val, falsos_pos_val, correctos_neg_val]
             }).to_excel(writer, sheet_name='Validacion_Campo', index=False)
         pd.DataFrame({'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Mod_Termico', 'Umbral_Termoinhibicion'], 'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, mod_termico, umbral_termoinhibicion]}).to_excel(writer, sheet_name='Bio_Params', index=False)
 
