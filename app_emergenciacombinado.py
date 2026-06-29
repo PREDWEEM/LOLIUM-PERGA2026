@@ -1,3 +1,4 @@
+
 # -*- coding: utf-8 -*-
 # ===============================================================
 # 👑 PREDWEEM INTEGRAL vK4.9.15 — LOLIUM PERGAMINO 2026
@@ -12,6 +13,7 @@
 # - OPTIMIZADOR 2D: Barrido de parámetros de suelo (W_Max y Ke) adaptado a ventanas reales de campo.
 # - COINCIDENCIA OPERATIVA: Métricas F1-Score y Exactitud Global.
 # - TRANSPARENCIA: Matriz de Confusión interactiva integrada en el Dashboard.
+# - SINCRONÍA DE INICIO: Evaluación del desfase temporal del primer flujo (Gatillo de DGA).
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
 # - SIMULACIÓN: Escenario fijo de incremento térmico (+1°C) a partir del 21 de mayo.
 # ===============================================================
@@ -535,8 +537,18 @@ if df_meteo_raw is not None and modelo_ann is not None:
     hits_val, misses_val, falsos_pos_val, correctos_neg_val = 0, 0, 0, 0
     pec, peak_lag, lead_time, desfase_t50 = 0.0, 0, 0, 0
     df_sincronizado = pd.DataFrame()
+    
+    # --- CÁLCULO DE SINCRONÍA DE INICIO ---
+    lag_inicio_dias = None
+    fecha_primer_flujo_obs = None
 
     if df_campo is not None:
+        muestreos_con_plantas = df_campo[df_campo[col_plm2] > 0]
+        if not muestreos_con_plantas.empty:
+            fecha_primer_flujo_obs = muestreos_con_plantas.iloc[0][col_fecha]
+            if fecha_inicio_ventana is not None:
+                lag_inicio_dias = (fecha_inicio_ventana - fecha_primer_flujo_obs).days
+
         df_sincronizado = sincronizar_intervalos_variables(df, df_campo, col_fecha, col_plm2)
         if not df_sincronizado.empty:
             metricas_robustas = calcular_metricas_validacion_integral(df_sincronizado, umbral_deteccion=0.05)
@@ -550,7 +562,6 @@ if df_meteo_raw is not None and modelo_ann is not None:
             exactitud_global = metricas_robustas["Exactitud_Global"]
             f1_score_coincidencia = metricas_robustas["F1_Score_Coincidencia"]
             
-            # Matriz de Confusión
             hits_val = metricas_robustas["Hits"]
             misses_val = metricas_robustas["Misses"]
             falsos_pos_val = metricas_robustas["Falsos_Positivos"]
@@ -600,8 +611,18 @@ if df_meteo_raw is not None and modelo_ann is not None:
             d1.metric("F1-Score (Coincidencia)", f"{f1_score_coincidencia:.3f}", "Fidelidad en ventanas activas")
             d2.metric("Exactitud Global", f"{exactitud_global * 100:.1f}%", "Acuerdo total (Invierno + Verano)")
             d3.metric("Falsos Positivos", f"{falsos_pos_val}", "Intervalos simulados sin contraparte real", delta_color="inverse")
+
+            # --- NUEVA SECCIÓN: SINCRONÍA DE INICIO ---
+            st.markdown("<p class='metric-header' style='margin-top:15px;'>⏰ SINCRONÍA DE INICIO (Gatillo de Tiempo Térmico)</p>", unsafe_allow_html=True)
+            s1, s2, s3 = st.columns(3)
+            s1.metric("Inicio Simulado", fecha_inicio_ventana.strftime('%d-%m-%Y') if fecha_inicio_ventana else "N/A")
+            s2.metric("Inicio Observado (Campo)", fecha_primer_flujo_obs.strftime('%d-%m-%Y') if fecha_primer_flujo_obs else "N/A")
             
-            # --- TABLA HTML: MATRIZ DE CONFUSIÓN ---
+            str_lag = "N/A"
+            if lag_inicio_dias is not None:
+                str_lag = f"{lag_inicio_dias:+} días"
+            s3.metric("Desfase de Gatillo", str_lag, "Negativo = Modelo Anticipa", delta_color="inverse" if (lag_inicio_dias and lag_inicio_dias > 0) else "normal" if (lag_inicio_dias and lag_inicio_dias < 0) else "off")
+            
             html_cm = f"""
             <div style="background-color:#ffffff; padding:15px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.1); border:1px solid #e2e8f0; margin-top:15px;">
                 <p style="color:#1e293b; font-weight:bold; margin-top:0; margin-bottom:10px;">🧩 Matriz de Confusión (Intervalos de Monitoreo)</p>
@@ -758,9 +779,11 @@ if df_meteo_raw is not None and modelo_ann is not None:
         df.to_excel(writer, index=False, sheet_name='Data_Diaria')
         if df_campo is not None and not df_sincronizado.empty:
             df_campo.to_excel(writer, index=False, sheet_name='Campo_Validacion')
+            
+            val_lag = lag_inicio_dias if lag_inicio_dias is not None else "N/A"
             pd.DataFrame({
-                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)', 'F1-Score (Coincidencia)', 'Exactitud Global', 'Hits (Aciertos)', 'Misses (Omisiones)', 'Falsos Positivos', 'Correctos Negativos'], 
-                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50, f1_score_coincidencia, exactitud_global, hits_val, misses_val, falsos_pos_val, correctos_neg_val]
+                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)', 'F1-Score (Coincidencia)', 'Exactitud Global', 'Hits (Aciertos)', 'Misses (Omisiones)', 'Falsos Positivos', 'Correctos Negativos', 'Desfase Primer Flujo (días)'], 
+                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50, f1_score_coincidencia, exactitud_global, hits_val, misses_val, falsos_pos_val, correctos_neg_val, val_lag]
             }).to_excel(writer, sheet_name='Validacion_Campo', index=False)
         pd.DataFrame({'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Mod_Termico', 'Umbral_Termoinhibicion'], 'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, mod_termico, umbral_termoinhibicion]}).to_excel(writer, sheet_name='Bio_Params', index=False)
 
