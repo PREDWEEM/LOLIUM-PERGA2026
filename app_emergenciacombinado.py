@@ -10,6 +10,7 @@
 # - VALIDACIÓN POR EVENTO REAL: Incorporación del método de Integración Dinámica por
 #   Intervalo Variable (Event-to-Event), apto para frecuencias de monitoreo de 7 a 21 días.
 # - OPTIMIZADOR 2D: Barrido de parámetros de suelo (W_Max y Ke) adaptado a ventanas reales de campo.
+# - FIABILIDAD OPERATIVA: Métricas Categóricas Integradas (POD, FAR, CSI) para evaluar detección.
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
 # - SIMULACIÓN: Escenario fijo de incremento térmico (+1°C) a partir del 21 de mayo.
 # ===============================================================
@@ -209,9 +210,11 @@ def sincronizar_intervalos_variables(df_sim, df_campo, col_fecha, col_plm2):
     
     return df_res
 
-def calcular_metricas_validacion_integral(df_sync):
+def calcular_metricas_validacion_integral(df_sync, umbral_deteccion=0.05):
     if df_sync.empty or len(df_sync) < 2:
-        return {"Pearson_Flujos": 0.0, "NSE_Flujos": 0.0, "KGE_Flujos": 0.0, "RMSE_Acumulado": 0.0, "CCC_Acumulado": 0.0, "R2_Acumulado": 0.0}
+        return {"Pearson_Flujos": 0.0, "NSE_Flujos": 0.0, "KGE_Flujos": 0.0, 
+                "RMSE_Acumulado": 0.0, "CCC_Acumulado": 0.0, "R2_Acumulado": 0.0,
+                "POD_Deteccion": 0.0, "FAR_Alarmas": 0.0, "CSI_Fiabilidad": 0.0}
 
     mask_activos = (df_sync['Campo_Relativo'] > 0) | (df_sync['Sim_Relativo'] > 0)
     df_activos = df_sync[mask_activos].copy()
@@ -250,13 +253,28 @@ def calcular_metricas_validacion_integral(df_sync):
     ss_tot_ac = np.sum((obs_acum - mean_obs_ac)**2)
     r2_acumulado = 1 - (ss_res_ac / ss_tot_ac) if ss_tot_ac > 0 else 0.0
     
+    # --- MÉTRICAS CATEGÓRICAS DE DETECCIÓN (Fiabilidad) ---
+    obs_eventos = df_sync['Campo_Relativo'] > umbral_deteccion
+    sim_eventos = df_sync['Sim_Relativo'] > umbral_deteccion
+
+    hits = np.sum(obs_eventos & sim_eventos)
+    misses = np.sum(obs_eventos & ~sim_eventos)
+    false_alarms = np.sum(~obs_eventos & sim_eventos)
+
+    pod = hits / (hits + misses) if (hits + misses) > 0 else 0.0
+    far = false_alarms / (hits + false_alarms) if (hits + false_alarms) > 0 else 0.0
+    csi = hits / (hits + misses + false_alarms) if (hits + misses + false_alarms) > 0 else 0.0
+    
     return {
         "Pearson_Flujos": pearson_r, 
         "NSE_Flujos": nse_flujos,
         "KGE_Flujos": kge_flujos,
         "RMSE_Acumulado": rmse_acumulado, 
         "CCC_Acumulado": ccc_acumulado,
-        "R2_Acumulado": r2_acumulado
+        "R2_Acumulado": r2_acumulado,
+        "POD_Deteccion": pod,
+        "FAR_Alarmas": far,
+        "CSI_Fiabilidad": csi
     }
 
 # ---------------------------------------------------------
@@ -310,6 +328,7 @@ def optimizar_parametros_hidricos_2d(df_meteo, df_campo, modelo_ann, latitud_per
             resultados.append({
                 "W_Max (mm)": w_max,
                 "Ke_Suelo": round(ke, 2),
+                "CSI (Fiabilidad)": metricas["CSI_Fiabilidad"],
                 "NSE (Flujos Reales)": metricas["NSE_Flujos"],
                 "KGE": metricas["KGE_Flujos"],
                 "CCC (Acumulado)": metricas["CCC_Acumulado"],
@@ -318,7 +337,8 @@ def optimizar_parametros_hidricos_2d(df_meteo, df_campo, modelo_ann, latitud_per
             })
             
     df_resultados = pd.DataFrame(resultados)
-    return df_resultados.sort_values(by="NSE (Flujos Reales)", ascending=False).reset_index(drop=True)
+    # Ordenar priorizando el CSI, seguido del NSE
+    return df_resultados.sort_values(by=["CSI (Fiabilidad)", "NSE (Flujos Reales)"], ascending=[False, False]).reset_index(drop=True)
 
 # ---------------------------------------------------------
 # 4. INTERFAZ PRINCIPAL Y CARGA DE LOTE
@@ -512,13 +532,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
 
     # Sincronización Event-to-Event por Intervalos Reales
     pearson_r, nse_flujos, kge_flujos, rmse_acum, ccc_acum, r2_acum = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+    pod_deteccion, far_alarmas, csi_fiabilidad = 0.0, 0.0, 0.0
     pec, peak_lag, lead_time, desfase_t50 = 0.0, 0, 0, 0
     df_sincronizado = pd.DataFrame()
 
     if df_campo is not None:
         df_sincronizado = sincronizar_intervalos_variables(df, df_campo, col_fecha, col_plm2)
         if not df_sincronizado.empty:
-            metricas_robustas = calcular_metricas_validacion_integral(df_sincronizado)
+            metricas_robustas = calcular_metricas_validacion_integral(df_sincronizado, umbral_deteccion=0.05)
             
             pearson_r = metricas_robustas["Pearson_Flujos"]
             nse_flujos = metricas_robustas["NSE_Flujos"]
@@ -526,6 +547,9 @@ if df_meteo_raw is not None and modelo_ann is not None:
             rmse_acum = metricas_robustas["RMSE_Acumulado"]
             ccc_acum = metricas_robustas["CCC_Acumulado"]
             r2_acum = metricas_robustas["R2_Acumulado"]
+            pod_deteccion = metricas_robustas["POD_Deteccion"]
+            far_alarmas = metricas_robustas["FAR_Alarmas"]
+            csi_fiabilidad = metricas_robustas["CSI_Fiabilidad"]
             
             tot_plm2 = df_campo[col_plm2].sum()
             if tot_plm2 > 0:
@@ -567,6 +591,12 @@ if df_meteo_raw is not None and modelo_ann is not None:
             c3.metric("Trayectoria (CCC)", f"{ccc_acum:.3f}", "Curva Acum.")
             c4.metric("Error (RMSE)", f"{rmse_acum:.3f}", "Desvío Acumulado", delta_color="inverse")
             c5.metric("Desfase (T50)", f"{desfase_t50:+d} días", "Sincronía Operativa", delta_color="inverse" if desfase_t50 > 0 else "normal" if desfase_t50 < 0 else "off")
+
+            st.markdown("<p class='metric-header' style='margin-top:15px;'>🎯 FIABILIDAD OPERATIVA DE DETECCIÓN (Categórica)</p>", unsafe_allow_html=True)
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Índice de Éxito (CSI)", f"{csi_fiabilidad:.3f}", "Fiabilidad Global")
+            d2.metric("Prob. Detección (POD)", f"{pod_deteccion:.3f}", "Sensibilidad")
+            d3.metric("Tasa Falsa Alarma (FAR)", f"{far_alarmas:.3f}", "Falsos Positivos", delta_color="inverse")
     
             if fecha_control:
                 st.markdown("<p class='metric-header' style='margin-top:15px;'>⚙️ LOGÍSTICA DE CONTROL EN LOTE</p>", unsafe_allow_html=True)
@@ -703,8 +733,8 @@ if df_meteo_raw is not None and modelo_ann is not None:
         if df_campo is not None and not df_sincronizado.empty:
             df_campo.to_excel(writer, index=False, sheet_name='Campo_Validacion')
             pd.DataFrame({
-                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)'], 
-                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50]
+                'Métrica de Validación': ['PEC (%)', 'Lag Control (días)', 'Lead Time Control (días)', 'Pearson (Flujos)', 'NSE (Flujos Reales Evento)', 'KGE (Flujos)', 'RMSE (Acumulado)', 'R2 (Acumulado)', 'CCC (Acumulado)', 'Desfase T50 Global (días)', 'POD (Probabilidad Deteccion)', 'FAR (Tasa Falsas Alarmas)', 'CSI (Indice Exito Crítico)'], 
+                'Valor': [pec, peak_lag, lead_time, pearson_r, nse_flujos, kge_flujos, rmse_acum, r2_acum, ccc_acum, desfase_t50, pod_deteccion, far_alarmas, csi_fiabilidad]
             }).to_excel(writer, sheet_name='Validacion_Campo', index=False)
         pd.DataFrame({'Configuracion': ['T_Base', 'T_Optima', 'T_Critica', 'W_Max', 'Ke', 'Mod_Termico', 'Umbral_Termoinhibicion'], 'Valor': [t_base_val, t_opt_max, t_critica, w_max_val, ke_val, mod_termico, umbral_termoinhibicion]}).to_excel(writer, sheet_name='Bio_Params', index=False)
 
