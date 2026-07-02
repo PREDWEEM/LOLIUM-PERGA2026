@@ -452,7 +452,7 @@ df_campo_raw = load_data(archivo_campo, "pergamino_campo")
 st.sidebar.image("https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/logo.png", use_container_width=True)
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 umbral_er = st.sidebar.slider("Umbral Tasa Diaria", 0.001, 0.80, 0.005)
-umbral_termoinhibicion = st.sidebar.number_input("Umbral Termoinhibición (°C)", 15.0, 35.0, 20.0, 0.5)
+umbral_termoinhibicion = st.sidebar.number_input("Umbral Termoinhibición (°C)", 15.0, 35.0, 19.0, 0.5)
 umbral_choque_hidrico = st.sidebar.slider(
     "Choque Hídrico 3 días (mm)",
     min_value=10.0,
