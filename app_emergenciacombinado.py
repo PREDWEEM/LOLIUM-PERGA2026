@@ -1,11 +1,11 @@
-
 # -*- coding: utf-8 -*-
 # ===============================================================
 # 👑 PREDWEEM INTEGRAL vK4.9.15 — LOLIUM PERGAMINO 2026
 # Actualización y Rigor Científico:
 # - ADAPTACIÓN PERGAMINO: Coordenadas fijas en LAT=-33.9443 y LON=-60.5745 para ET0 Hargreaves.
 # - IDENTIDAD: PREDWEEM by GUILLERMO R. CHANTRE.
-# - LATENCIA INICIAL: Bloqueo estricto de emergencia los primeros 25 días del año.
+# - LATENCIA INICIAL: Bloqueo estricto de emergencia los primeros 45 días del año.
+# - ESCUDO TERMOFISIOLÓGICO: Horizonte de termoinhibición dinámico ajustado a 5 días.
 # - ESPECÍFICO PERGAMINO: Bypass por choque hídrico temprano limitado a un techo de 0.75.
 # - ESPECÍFICO PERGAMINO: Techo estricto 0-1 de tasa diaria (Patrón de agotamiento deshabilitado).
 # - VALIDACIÓN POR EVENTO REAL: Incorporación del método de Integración Dinámica por
@@ -261,7 +261,7 @@ def calcular_metricas_validacion_integral(df_sync, umbral_deteccion=0.05):
     obs_eventos = df_sync['Campo_Relativo'] > umbral_deteccion
     sim_eventos = df_sync['Sim_Relativo'] > umbral_deteccion
 
-    hits = np.sum(obs_eventos & sim_eventos)                 
+    hits = np.sum(obs_eventos & sim_eventos)                  
     misses = np.sum(obs_eventos & ~sim_eventos)              
     false_alarms = np.sum(~obs_eventos & sim_eventos)        
     correct_negatives = np.sum(~obs_eventos & ~sim_eventos)  
@@ -327,8 +327,8 @@ def optimizar_parametros_hidricos_2d(df_meteo, df_campo, modelo_ann, latitud_per
             df_sim['Lluvia_Recarga'] = (df_sim['Prec'] >= w_max).cummax()
             df_sim.loc[~df_sim['Lluvia_Recarga'], "EMERREL"] = 0.0
             
-            df_sim["Tmedia_10d"] = df_sim["Tmedia_aire"].rolling(window=10, min_periods=1).mean()
-            df_sim.loc[df_sim["Tmedia_10d"] >= 24.0, "EMERREL"] = 0.0
+            df_sim["Tmedia_5d"] = df_sim["Tmedia_aire"].rolling(window=5, min_periods=1).mean()
+            df_sim.loc[df_sim["Tmedia_5d"] >= 24.0, "EMERREL"] = 0.0
             
             df_sim["EMERREL"] = np.clip(df_sim["EMERREL"], 0, 1.0)
             
@@ -483,12 +483,12 @@ if df_meteo_raw is not None and modelo_ann is not None:
     emerrel_raw, _ = modelo_ann.predict(X)
     df["EMERREL"] = np.maximum(emerrel_raw, 0.0)
 
-    df.loc[df["Julian_days"] <= 25, "EMERREL"] = 0.0
-
+    # 1. Bypass Ruptura Temprana (Sincronizado post-latencia de 45 días)
     df["Prec_3d"] = df["Prec"].rolling(window=3, min_periods=1).sum()
-    mask_ruptura = (df["Julian_days"] <= 110) & (df["Prec_3d"] >= umbral_choque_hidrico)
+    mask_ruptura = (df["Julian_days"] > 45) & (df["Julian_days"] <= 110) & (df["Prec_3d"] >= umbral_choque_hidrico)
     df.loc[mask_ruptura, "EMERREL"] = np.maximum(df.loc[mask_ruptura, "EMERREL"], 0.75)
 
+    # 2. Balance Hídrico Superficial (Pergamino)
     df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.9443)
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
     humedad_relativa = df["W_superficial"] / w_max_val
@@ -499,9 +499,13 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df['Lluvia_Recarga'] = (df['Prec'] >= w_max_val).cummax()
     df.loc[~df['Lluvia_Recarga'], "EMERREL"] = 0.0
 
+    # 3. Escudo Termofisiológico — HORIZONTE DE EVALUACIÓN REDUCIDO A 5 DÍAS
     df["Tmedia"] = df["Tmedia_aire"]
-    df["Tmedia_10d"] = df["Tmedia"].rolling(window=10, min_periods=1).mean()
-    df.loc[df["Tmedia_10d"] >= umbral_termoinhibicion, "EMERREL"] = 0.0
+    df["Tmedia_5d"] = df["Tmedia"].rolling(window=5, min_periods=1).mean()
+    df.loc[df["Tmedia_5d"] >= umbral_termoinhibicion, "EMERREL"] = 0.0
+
+    # 4. Bloqueo de latencia temprana corregido (Primeros 45 días del año)
+    df.loc[df["Julian_days"] <= 45, "EMERREL"] = 0.0
 
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
