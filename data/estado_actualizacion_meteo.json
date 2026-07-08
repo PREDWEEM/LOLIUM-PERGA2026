@@ -1,0 +1,12 @@
+{
+  "ejecucion_utc": "2026-07-08T17:08:22+00:00",
+  "sitio": "Pergamino",
+  "latitud": -33.9443,
+  "longitud": -60.5745,
+  "estado_siga": "SIGA_remoto",
+  "ultima_observacion_siga": "2026-07-07",
+  "fuente_pronostico": "ECMWF_IFS_ENS_025",
+  "inicio_pronostico": "2026-07-08",
+  "fin_pronostico": "2026-07-14",
+  "huecos_observados": []
+}
