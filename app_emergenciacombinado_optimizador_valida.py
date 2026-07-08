@@ -184,6 +184,50 @@ def aplicar_filtro_primer_pico(
     return df, idx_primer_pico
 
 
+def aplicar_lag_emergencia(
+    df,
+    lag_dias=0,
+    *,
+    col_emergencia="EMERREL",
+    umbral_primer_pico=UMBRAL_PRIMER_PICO
+):
+    """
+    Desplaza temporalmente la emergencia simulada.
+
+    Convención:
+      lag_dias > 0  => retrasa la emergencia simulada.
+      lag_dias = 0  => sin corrección.
+      lag_dias < 0  => anticipa la emergencia simulada.
+
+    El desplazamiento se aplica sobre la serie diaria ya filtrada
+    ecofisiológicamente, preservando el calendario meteorológico original.
+    Luego se recalcula el inicio operativo del primer pico.
+    """
+    df = df.copy()
+    lag_dias = int(lag_dias)
+
+    df["EMERREL_ANTES_LAG"] = df[col_emergencia].copy()
+    df["Lag_Emergencia_Dias"] = lag_dias
+
+    if lag_dias != 0:
+        df[col_emergencia] = (
+            df[col_emergencia]
+            .shift(lag_dias)
+            .fillna(0.0)
+            .clip(lower=0.0, upper=1.0)
+        )
+
+    candidatos = df.index[df[col_emergencia] > umbral_primer_pico].tolist()
+    if candidatos:
+        idx_primer_pico_lag = candidatos[0]
+        df["Primer_Pico_Habilitado"] = df.index >= idx_primer_pico_lag
+    else:
+        idx_primer_pico_lag = None
+        df["Primer_Pico_Habilitado"] = False
+
+    return df, idx_primer_pico_lag
+
+
 class PracticalANNModel:
     def __init__(self, IW, bIW, LW, bLW):
         self.IW, self.bIW, self.LW, self.bLW = IW, bIW, LW, bLW
@@ -350,6 +394,7 @@ def simular_predweem_parametrico(
     umbral_choque_hidrico=45.0,
     umbral_termoinhibicion=22.0,
     persistencia_primer_pico=1,
+    lag_emergencia_dias=0,
     umbral_primer_pico=UMBRAL_PRIMER_PICO,
     mod_termico=0.925,
     latitud_pergamino=-33.9443,
@@ -446,6 +491,12 @@ def simular_predweem_parametrico(
         persistencia_dias=persistencia_primer_pico
     )
 
+    df_sim, idx_primer_pico = aplicar_lag_emergencia(
+        df_sim,
+        lag_dias=lag_emergencia_dias,
+        umbral_primer_pico=umbral_primer_pico
+    )
+
     return df_sim, idx_primer_pico
 
 
@@ -486,6 +537,7 @@ def optimizar_parametros_multivariable_valida(
       - Termoinhibición 5 días: 22–24 °C
       - Choque hídrico 3 días: 45–60 mm
       - Persistencia primer pico: 1–3 días
+      - Lag emergencia: 0–35 días
       - W_Max: 30–40 mm
       - Ke suelo: 0.10–0.50
     """
@@ -498,6 +550,7 @@ def optimizar_parametros_multivariable_valida(
     rango_termoinhibicion = np.arange(22.0, 24.01, 0.5)
     rango_choque = np.arange(45.0, 60.01, 5.0)
     rango_persistencia = [1, 2, 3]
+    rango_lag = sorted(set(list(range(0, 36, 3)) + [22, 30]))
     rango_w_max = np.arange(30.0, 40.01, 2.0)
     rango_ke = np.round(np.arange(0.10, 0.501, 0.05), 2)
 
@@ -510,6 +563,7 @@ def optimizar_parametros_multivariable_valida(
         len(rango_termoinhibicion)
         * len(rango_choque)
         * len(rango_persistencia)
+        * len(rango_lag)
         * len(rango_w_max)
         * len(rango_ke)
     )
@@ -518,84 +572,87 @@ def optimizar_parametros_multivariable_valida(
     for termoinhibicion in rango_termoinhibicion:
         for choque in rango_choque:
             for persistencia in rango_persistencia:
-                for w_max in rango_w_max:
-                    for ke in rango_ke:
-                        iteracion += 1
-                        df_sim, idx_primer_pico = simular_predweem_parametrico(
-                            df_meteo,
-                            modelo_ann,
-                            w_max=float(w_max),
-                            ke_suelo=float(ke),
-                            umbral_choque_hidrico=float(choque),
-                            umbral_termoinhibicion=float(termoinhibicion),
-                            persistencia_primer_pico=int(persistencia),
-                            umbral_primer_pico=umbral_primer_pico,
-                            mod_termico=mod_termico,
-                            latitud_pergamino=latitud_pergamino,
-                            escenario_termico_mayo21=escenario_termico_mayo21
-                        )
+                for lag_dias in rango_lag:
+                    for w_max in rango_w_max:
+                        for ke in rango_ke:
+                            iteracion += 1
+                            df_sim, idx_primer_pico = simular_predweem_parametrico(
+                                df_meteo,
+                                modelo_ann,
+                                w_max=float(w_max),
+                                ke_suelo=float(ke),
+                                umbral_choque_hidrico=float(choque),
+                                umbral_termoinhibicion=float(termoinhibicion),
+                                persistencia_primer_pico=int(persistencia),
+                                lag_emergencia_dias=int(lag_dias),
+                                umbral_primer_pico=umbral_primer_pico,
+                                mod_termico=mod_termico,
+                                latitud_pergamino=latitud_pergamino,
+                                escenario_termico_mayo21=escenario_termico_mayo21
+                            )
 
-                        df_sync = sincronizar_intervalos_variables(
-                            df_sim,
-                            df_campo,
-                            col_fecha,
-                            col_plm2
-                        )
-                        metricas = calcular_metricas_validacion_integral(df_sync)
-                        t50_obs, t50_sim, desfase_t50 = calcular_desfase_t50(
-                            df_sim,
-                            df_campo,
-                            col_fecha,
-                            col_plm2
-                        )
+                            df_sync = sincronizar_intervalos_variables(
+                                df_sim,
+                                df_campo,
+                                col_fecha,
+                                col_plm2
+                            )
+                            metricas = calcular_metricas_validacion_integral(df_sync)
+                            t50_obs, t50_sim, desfase_t50 = calcular_desfase_t50(
+                                df_sim,
+                                df_campo,
+                                col_fecha,
+                                col_plm2
+                            )
 
-                        penalizacion_t50 = 0 if pd.isna(desfase_t50) else abs(desfase_t50) / 30.0
-                        score = (
-                            0.35 * metricas["NSE_Flujos"]
-                            + 0.25 * metricas["KGE_Flujos"]
-                            + 0.20 * metricas["CCC_Acumulado"]
-                            + 0.10 * metricas["F1_Score_Coincidencia"]
-                            - 0.10 * penalizacion_t50
-                        )
+                            penalizacion_t50 = 0 if pd.isna(desfase_t50) else abs(desfase_t50) / 30.0
+                            score = (
+                                0.35 * metricas["NSE_Flujos"]
+                                + 0.25 * metricas["KGE_Flujos"]
+                                + 0.20 * metricas["CCC_Acumulado"]
+                                + 0.10 * metricas["F1_Score_Coincidencia"]
+                                - 0.10 * penalizacion_t50
+                            )
 
-                        fecha_inicio = (
-                            df_sim.loc[idx_primer_pico, "Fecha"]
-                            if idx_primer_pico is not None
-                            else pd.NaT
-                        )
+                            fecha_inicio = (
+                                df_sim.loc[idx_primer_pico, "Fecha"]
+                                if idx_primer_pico is not None
+                                else pd.NaT
+                            )
 
-                        fila = {
-                            "Score_Compuesto": score,
-                            "Termoinhibicion_5d_C": float(termoinhibicion),
-                            "Choque_Hidrico_3d_mm": float(choque),
-                            "Persistencia_Primer_Pico_dias": int(persistencia),
-                            "W_Max_mm": float(w_max),
-                            "Ke_Suelo": float(ke),
-                            "Fecha_Inicio_Sim": fecha_inicio,
-                            "T50_Obs": t50_obs,
-                            "T50_Sim": t50_sim,
-                            "Desfase_T50_dias": desfase_t50,
-                            "Pearson_Flujos": metricas["Pearson_Flujos"],
-                            "NSE_Flujos": metricas["NSE_Flujos"],
-                            "KGE_Flujos": metricas["KGE_Flujos"],
-                            "CCC_Acumulado": metricas["CCC_Acumulado"],
-                            "R2_Acumulado": metricas["R2_Acumulado"],
-                            "RMSE_Acumulado": metricas["RMSE_Acumulado"],
-                            "F1_Score": metricas["F1_Score_Coincidencia"],
-                            "Exactitud_Global": metricas["Exactitud_Global"],
-                            "Hits": metricas["Hits"],
-                            "Misses": metricas["Misses"],
-                            "Falsos_Positivos": metricas["Falsos_Positivos"],
-                            "Correctos_Negativos": metricas["Correctos_Negativos"],
-                            "Iteracion": iteracion,
-                            "Total_Iteraciones": total_iter
-                        }
-                        resultados.append(fila)
+                            fila = {
+                                "Score_Compuesto": score,
+                                "Termoinhibicion_5d_C": float(termoinhibicion),
+                                "Choque_Hidrico_3d_mm": float(choque),
+                                "Persistencia_Primer_Pico_dias": int(persistencia),
+                                "Lag_Emergencia_dias": int(lag_dias),
+                                "W_Max_mm": float(w_max),
+                                "Ke_Suelo": float(ke),
+                                "Fecha_Inicio_Sim": fecha_inicio,
+                                "T50_Obs": t50_obs,
+                                "T50_Sim": t50_sim,
+                                "Desfase_T50_dias": desfase_t50,
+                                "Pearson_Flujos": metricas["Pearson_Flujos"],
+                                "NSE_Flujos": metricas["NSE_Flujos"],
+                                "KGE_Flujos": metricas["KGE_Flujos"],
+                                "CCC_Acumulado": metricas["CCC_Acumulado"],
+                                "R2_Acumulado": metricas["R2_Acumulado"],
+                                "RMSE_Acumulado": metricas["RMSE_Acumulado"],
+                                "F1_Score": metricas["F1_Score_Coincidencia"],
+                                "Exactitud_Global": metricas["Exactitud_Global"],
+                                "Hits": metricas["Hits"],
+                                "Misses": metricas["Misses"],
+                                "Falsos_Positivos": metricas["Falsos_Positivos"],
+                                "Correctos_Negativos": metricas["Correctos_Negativos"],
+                                "Iteracion": iteracion,
+                                "Total_Iteraciones": total_iter
+                            }
+                            resultados.append(fila)
 
-                        if score > mejor_score:
-                            mejor_score = score
-                            mejor_df = df_sim.copy()
-                            mejor_sync = df_sync.copy()
+                            if score > mejor_score:
+                                mejor_score = score
+                                mejor_df = df_sim.copy()
+                                mejor_sync = df_sync.copy()
 
     df_resultados = pd.DataFrame(resultados)
     df_resultados = df_resultados.sort_values(
@@ -677,6 +734,23 @@ st.sidebar.info(
     f"El inicio de la campaña se habilita cuando EMERREL > "
     f"{UMBRAL_PRIMER_PICO:.2f} durante {persistencia_primer_pico} día(s) consecutivo(s)."
 )
+
+lag_emergencia_dias = st.sidebar.slider(
+    "Lag emergencia simulada (días)",
+    min_value=-15,
+    max_value=45,
+    value=22,
+    step=1,
+    help=(
+        "Valores positivos retrasan la curva simulada. "
+        "Use +22 a +30 días si el modelo anticipa el inicio respecto de VALIDA."
+    )
+)
+
+st.sidebar.info(
+    f"Corrección temporal aplicada: {lag_emergencia_dias:+d} día(s). "
+    "Esta corrección desplaza EMERREL, recalcula el primer pico y actualiza DGA/T50."
+)
 residualidad = st.sidebar.number_input("Residualidad Herbicida (días)", 0, 60, 0)
 col_t1, col_t2 = st.sidebar.columns(2)
 with col_t1: t_base_val = st.number_input("T Base", value=2.0, step=0.5)
@@ -703,13 +777,14 @@ st.sidebar.info("🌡️ **Escenario Fijo Activo:** Incremento automático de **
 with st.sidebar.expander("🛠️ Modo Dev: Optimizador Multivariable VALIDA", expanded=False):
     st.caption(
         "Optimiza Termoinhibición 5d, Choque Hídrico 3d, Persistencia del Primer Pico, "
-        "W_Max y Ke contra los intervalos reales de VALIDA."
+        "Lag de emergencia, W_Max y Ke contra los intervalos reales de VALIDA."
     )
     st.markdown("""
     **Rangos evaluados**
     - Termoinhibición 5d: 22–24 °C  
     - Choque hídrico 3d: 45–60 mm  
     - Persistencia primer pico: 1–3 días  
+    - Lag emergencia: 0–35 días  
     - W_Max: 30–40 mm  
     - Ke: 0.10–0.50
     """)
@@ -737,6 +812,7 @@ with st.sidebar.expander("🛠️ Modo Dev: Optimizador Multivariable VALIDA", e
                     "Termoinhibición 5d (°C)": mejor["Termoinhibicion_5d_C"],
                     "Choque hídrico 3d (mm)": mejor["Choque_Hidrico_3d_mm"],
                     "Persistencia primer pico (días)": int(mejor["Persistencia_Primer_Pico_dias"]),
+                    "Lag emergencia (días)": int(mejor["Lag_Emergencia_dias"]),
                     "W_Max (mm)": mejor["W_Max_mm"],
                     "Ke": mejor["Ke_Suelo"],
                     "NSE flujos": round(float(mejor["NSE_Flujos"]), 4),
@@ -834,6 +910,14 @@ if df_meteo_raw is not None and modelo_ann is not None:
         df,
         umbral=UMBRAL_PRIMER_PICO,
         persistencia_dias=persistencia_primer_pico
+    )
+
+    # 6. Corrección temporal: lag de emergencia simulada.
+    #    Lag positivo = retrasa EMERREL y compensa anticipación del modelo.
+    df, idx_primer_pico = aplicar_lag_emergencia(
+        df,
+        lag_dias=lag_emergencia_dias,
+        umbral_primer_pico=UMBRAL_PRIMER_PICO
     )
 
     df["DG"] = df["Tmedia"].apply(lambda x: calculate_tt_scalar(x, t_base_val, t_opt_max, t_critica))
