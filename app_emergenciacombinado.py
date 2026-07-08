@@ -17,7 +17,7 @@
 # - TRANSPARENCIA: Matriz de Confusión interactiva integrada en el Dashboard.
 # - SINCRONÍA DE INICIO: Evaluación del desfase temporal del primer flujo (Gatillo de DGA).
 # - UX DINÁMICA: Sombreados de fondo en el monitor principal vinculados al calendario real de monitoreo.
-# - SIMULACIÓN: Escenario fijo de incremento térmico (+1°C) a partir del 21 de mayo.
+# - SIMULACIÓN: Sin incremento térmico artificial; lag fijo de emergencia de +22 días.
 # ===============================================================
 
 import streamlit as st
@@ -68,6 +68,7 @@ st.markdown("""
 BASE = Path(__file__).parent if "__file__" in globals() else Path.cwd()
 
 UMBRAL_PRIMER_PICO = 0.70
+LAG_EMERGENCIA_DIAS = 22  # Lag fijo: retrasa 22 días la emergencia simulada
 
 def set_bg_hack(main_bg_file):
     try:
@@ -159,6 +160,35 @@ def aplicar_filtro_primer_pico(df, umbral=UMBRAL_PRIMER_PICO):
         df["EMERREL"] = 0.0
 
     return df, idx_primer_pico
+
+def aplicar_lag_emergencia(df, lag_dias=LAG_EMERGENCIA_DIAS, col="EMERREL"):
+    """
+    Aplica un lag temporal fijo a la tasa diaria de emergencia.
+    lag_dias > 0 retrasa la emergencia; lag_dias < 0 la anticipa.
+
+    La fecha meteorológica no cambia; se desplaza la señal de emergencia
+    dentro del calendario para compensar el desfase observado del inicio.
+    """
+    df = df.copy()
+    df[f"{col}_SIN_LAG"] = df[col].copy()
+
+    if lag_dias == 0:
+        df["Lag_Emergencia_Dias"] = 0
+        return df
+
+    valores = df[col].to_numpy(float)
+    desplazado = np.zeros_like(valores)
+
+    if lag_dias > 0:
+        desplazado[lag_dias:] = valores[:-lag_dias]
+    else:
+        k = abs(lag_dias)
+        desplazado[:-k] = valores[k:]
+
+    df[col] = desplazado
+    df["Lag_Emergencia_Dias"] = int(lag_dias)
+    return df
+
 
 class PracticalANNModel:
     def __init__(self, IW, bIW, LW, bLW):
@@ -483,10 +513,13 @@ st.sidebar.divider()
 st.sidebar.markdown("## 📊 4. Estado de Validación")
 st.sidebar.info("🔬 **Modo Event-to-Event Activado**: Las ventanas de validación mapean dinámicamente el calendario real de tus datos de campo (7-21 días), protegiendo la varianza de flujos de Lolium.")
 
-# --- SECCIÓN: MÓDULO DE SIMULACIÓN (FIJO) ---
+# --- SECCIÓN: AJUSTE TEMPORAL FIJO ---
 st.sidebar.divider()
-st.sidebar.markdown("## 🌤️ 5. Escenario Climático")
-st.sidebar.info("🌡️ **Escenario Fijo Activo:** Incremento automático de **+1°C** aplicado a las temperaturas máximas y mínimas a partir del **21 de Mayo**.")
+st.sidebar.markdown("## ⏱️ 5. Ajuste Temporal")
+st.sidebar.info(
+    f"⏳ **Lag fijo activo:** la emergencia simulada se retrasa "
+    f"**{LAG_EMERGENCIA_DIAS} días**. No se aplica incremento térmico artificial."
+)
 
 # --- MODO DESARROLLADOR: CALIBRADOR 2D ---
 with st.sidebar.expander("🛠️ Modo Dev: Calibrador Bio-Físico 2D", expanded=False):
@@ -526,22 +559,8 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     df = df.dropna(subset=["Fecha", "TMAX", "TMIN", "Prec"]).sort_values("Fecha").reset_index(drop=True)
     
-    año_actual = df['Fecha'].dt.year.max()
-    fecha_corte = pd.Timestamp(year=año_actual, month=5, day=21)
-    mask_escenario = df['Fecha'] >= fecha_corte
-    
-    df.loc[mask_escenario, 'TMAX'] += 1.0
-    df.loc[mask_escenario, 'TMIN'] += 1.0
-
+    # Sin incremento térmico artificial.
     df["Julian_days"] = df["Fecha"].dt.dayofyear
-
-    # Escenario fijo de Pergamino: +1 °C desde el 21 de mayo
-    anio_opt = df["Fecha"].dt.year.max()
-    fecha_corte_opt = pd.Timestamp(year=anio_opt, month=5, day=21)
-    mask_escenario_opt = df["Fecha"] >= fecha_corte_opt
-    df.loc[mask_escenario_opt, "TMAX"] += 1.0
-    df.loc[mask_escenario_opt, "TMIN"] += 1.0
-
     df["Tmedia_aire"] = (df["TMAX"] + df["TMIN"]) / 2
     amplitud_termica = (df["TMAX"] - df["TMIN"]) / 2
     df["TMAX_suelo"] = df["Tmedia_aire"] + (amplitud_termica * mod_termico)
@@ -589,6 +608,15 @@ if df_meteo_raw is not None and modelo_ann is not None:
 
     # 5. Validación del primer pico
     # La campaña comienza en el primer valor estrictamente superior a 0.70.
+    df, idx_primer_pico_original = aplicar_filtro_primer_pico(
+        df,
+        umbral=UMBRAL_PRIMER_PICO
+    )
+
+    # 6. Lag fijo de emergencia: retrasa la señal simulada 22 días.
+    # Luego se recalcula el primer pico sobre la señal desplazada para que
+    # inicio, DGA, T50 y validación queden sincronizados con el calendario corregido.
+    df = aplicar_lag_emergencia(df, lag_dias=LAG_EMERGENCIA_DIAS, col="EMERREL")
     df, idx_primer_pico = aplicar_filtro_primer_pico(
         df,
         umbral=UMBRAL_PRIMER_PICO
@@ -890,6 +918,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
                 'Mod_Termico', 'Umbral_Termoinhibicion',
                 'Umbral_Choque_Hidrico_3d',
                 'Umbral_Primer_Pico',
+                'Lag_Emergencia_Dias',
                 'Escenario_Termico_desde_21_Mayo'
             ],
             'Valor': [
@@ -897,11 +926,12 @@ if df_meteo_raw is not None and modelo_ann is not None:
                 mod_termico, umbral_termoinhibicion,
                 umbral_choque_hidrico,
                 UMBRAL_PRIMER_PICO,
-                1.0
+                LAG_EMERGENCIA_DIAS,
+                0.0
             ]
         }).to_excel(writer, sheet_name='Bio_Params', index=False)
 
-    st.sidebar.download_button("📥 Descargar Reporte Pergamino", output.getvalue(), "PREDWEEM_Integral_Pergamino_vK4_9_15.xlsx")
+    st.sidebar.download_button("📥 Descargar Reporte Pergamino", output.getvalue(), "PREDWEEM_Integral_Pergamino_sin_incremento_lag22.xlsx")
 
 else:
     st.info("👋 Bienvenido a PREDWEEM. El sistema cargará automáticamente los registros climáticos de Pergamino al iniciar.")
