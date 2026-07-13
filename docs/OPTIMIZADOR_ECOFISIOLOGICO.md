@@ -1,52 +1,71 @@
 # Optimizador ecofisiológico PREDWEEM
 
-## Objetivo
+## Situación actual: un solo conjunto de campo
 
-Calibrar los filtros ecofisiológicos del modelo de emergencia con un conjunto de campo y medir su capacidad de generalización con un segundo conjunto independiente. El archivo independiente no interviene en la selección de parámetros.
+El repositorio dispone actualmente de `VALIDA.xlsx` como único conjunto de
+observaciones de emergencia. Por ese motivo, la página del optimizador utiliza
+por defecto **validación cruzada temporal interna por bloques contiguos**.
 
-## Integración
+Este diseño:
 
-La página `pages/05_Optimizador_Ecofisiologico.py` aparece automáticamente en la navegación multipágina cuando se ejecuta `app_emergenciacombinado.py` con Streamlit.
+1. transforma cada conteo en un intervalo explícito entre dos fechas;
+2. divide la secuencia cronológica en bloques;
+3. evalúa cada combinación paramétrica en cada bloque retenido;
+4. selecciona la combinación con mejor score medio, penalizando la variabilidad
+   entre bloques;
+5. vuelve a calcular un ajuste descriptivo sobre toda la serie.
 
-El motor reutilizable se encuentra en el paquete `predweem_optimizer/` y no depende de Streamlit.
+El score de validación cruzada es una estimación interna. No debe denominarse
+“validación independiente”, porque todos los bloques pertenecen al mismo
+experimento, localidad y campaña.
 
-## Datos requeridos
+## Uso
 
-- Meteorología diaria: `Fecha`, `TMAX`, `TMIN`, `Prec` o sinónimos reconocibles.
-- Campo de calibración: fecha y una variable numérica de emergencia.
-- Campo de validación independiente: otro experimento, campaña o localidad no usado para calibrar.
-- Opcionalmente, una columna `Grupo`, `Sitio`, `Localidad`, `Campaña` o `Año` permite evaluar múltiples unidades y penalizar soluciones inestables.
+Ejecutar la aplicación Streamlit principal. La página:
 
-El campo puede cargarse como flujo por intervalo o como conteo acumulado.
+`pages/05_Optimizador_Ecofisiologico.py`
 
-## Método
+aparece automáticamente en el menú multipágina.
 
-1. Muestreo global estratificado del espacio paramétrico.
-2. Refinamiento local alrededor de las mejores soluciones.
-3. Score multicriterio con KGE, NSE, CCC, F1, RMSE acumulado y desfase T50.
-4. Penalización por variabilidad entre grupos de calibración.
-5. Selección final únicamente con calibración.
-6. Evaluación posterior en el conjunto independiente.
+En el modo predeterminado:
 
-## Variables disponibles
+- meteorología: `meteo_daily.csv`;
+- campo: `VALIDA.xlsx`;
+- diseño: validación cruzada temporal interna;
+- bloques solicitados: 3;
+- mínimo: 2 intervalos por bloque.
 
-Incluye capacidad hídrica superficial, Ke, centro y pendiente del filtro hídrico, corte por humedad, recarga, modulador térmico, latencia, ventana y umbral de termoinhibición, choque hídrico, primer pico y lag temporal.
+El motor de validación independiente permanece disponible en el paquete para
+cuando se incorpore otra campaña, localidad o experimento.
 
-## Correcciones respecto del calibrador 2D anterior
+## Variables explorables
 
-- El lag temporal se incluye dentro de cada simulación candidata.
-- El umbral y la ventana térmica dejan de estar fijados en valores distintos a la interfaz principal.
-- El modulador térmico y el balance hídrico se evalúan en el mismo motor.
-- El denominador de la curva simulada se trunca en la última fecha de campo.
-- El primer conteo de campo se conserva como primer intervalo, en lugar de descartarse.
-- Se impide usar el mismo archivo para calibración y validación.
-- La recarga hídrica se habilita por el estado de humedad alcanzado, permitiendo que lluvias sucesivas moderadas recarguen el estrato superficial.
+- capacidad superficial `w_max`;
+- coeficiente de evaporación `ke_suelo`;
+- umbral y pendiente hídrica;
+- corte y recarga de humedad;
+- modulador térmico del suelo;
+- duración de latencia;
+- ventana y umbral de termoinhibición;
+- ventana, umbral, final e intensidad del choque hídrico;
+- umbral y persistencia del primer pico;
+- lag de emergencia.
 
-## Salidas
+## Métricas
 
-- Parámetros óptimos en tabla y JSON.
-- Ranking de candidatos.
-- Métricas por grupo para calibración y validación independiente.
-- Curvas acumuladas y gráfico 1:1.
-- Sensibilidad aproximada por correlación de Spearman.
-- Informe Excel completo.
+- KGE y NSE de flujos por intervalo;
+- CCC y RMSE acumulados;
+- F1 de detección de eventos;
+- desfase T50;
+- score robusto medio menos penalización por variabilidad entre bloques.
+
+El T50 no participa en la selección por bloques, porque el T50 calculado dentro
+de un bloque no representa el T50 global de la campaña. Sí se informa en el
+ajuste descriptivo completo.
+
+## Interpretación científica
+
+Con `VALIDA.xlsx` pueden obtenerse parámetros provisionales y analizarse
+sensibilidad e inestabilidad temporal. La validación externa definitiva requiere
+al menos otra campaña, localidad o experimento que no participe en la selección
+de parámetros.
