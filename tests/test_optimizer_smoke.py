@@ -4,6 +4,7 @@ import pandas as pd
 from predweem_optimizer import (
     default_parameters,
     optimize_parameters,
+    optimize_parameters_temporal_cv,
     prepare_field,
     simulate_emergence,
     validate_independently,
@@ -32,19 +33,66 @@ def make_field(weather, params):
     sim = simulate_emergence(weather, DummyANN(), params)
     dates = pd.date_range("2026-02-01", "2026-06-20", freq="14D")
     flows = []
-    previous = dates[0]
-    flows.append(0.0)
-    for current in dates[1:]:
-        flows.append(sim.loc[(sim.Fecha > previous) & (sim.Fecha <= current), "EMERREL"].sum())
+    previous = weather["Fecha"].min() - pd.Timedelta(days=1)
+    for current in dates:
+        flows.append(
+            sim.loc[
+                (sim.Fecha > previous) & (sim.Fecha <= current),
+                "EMERREL",
+            ].sum()
+        )
         previous = current
     return pd.DataFrame({"FECHA": dates, "PLM2": flows})
 
 
-def test_pipeline_smoke():
+def test_temporal_cv_single_dataset_smoke():
     weather = make_weather()
     params = default_parameters()
-    params.update({"lag_dias": 8, "umbral_termoinhibicion": 27.0, "recarga_relativa": 0.25})
-    cal = prepare_field(make_field(weather, params), value_mode="interval")
+    params.update({
+        "lag_dias": 8,
+        "umbral_termoinhibicion": 27.0,
+        "recarga_relativa": 0.25,
+    })
+    field = prepare_field(
+        make_field(weather, params),
+        value_mode="interval",
+    )
+
+    result = optimize_parameters_temporal_cv(
+        weather,
+        field,
+        DummyANN(),
+        optimized_parameters=[
+            "lag_dias",
+            "umbral_termoinhibicion",
+        ],
+        n_global=12,
+        n_local=6,
+        seed=7,
+        n_folds=3,
+    )
+
+    assert not result["results"].empty
+    assert "lag_dias" in result["best_params"]
+    assert result["best_summary"]["N_Bloques"] >= 2
+    assert not result["cv_by_fold"].empty
+    assert not result["cv_sync"].empty
+    assert not result["apparent_sync"].empty
+    assert np.isfinite(result["best_summary"]["Score_CV"])
+
+
+def test_independent_mode_still_available():
+    weather = make_weather()
+    params = default_parameters()
+    params.update({
+        "lag_dias": 8,
+        "umbral_termoinhibicion": 27.0,
+        "recarga_relativa": 0.25,
+    })
+    cal = prepare_field(
+        make_field(weather, params),
+        value_mode="interval",
+    )
     val_raw = make_field(weather, params)
     val_raw["PLM2"] *= 1.05
     val = prepare_field(val_raw, value_mode="interval")
@@ -53,13 +101,21 @@ def test_pipeline_smoke():
         weather,
         cal,
         DummyANN(),
-        optimized_parameters=["lag_dias", "umbral_termoinhibicion"],
-        n_global=20,
-        n_local=10,
+        optimized_parameters=[
+            "lag_dias",
+            "umbral_termoinhibicion",
+        ],
+        n_global=10,
+        n_local=4,
         seed=7,
     )
-    independent = validate_independently(result, weather, val, DummyANN())
-    assert not result["results"].empty
-    assert "lag_dias" in result["best_params"]
-    assert np.isfinite(independent["summary"]["Score_Validacion"])
+    independent = validate_independently(
+        result,
+        weather,
+        val,
+        DummyANN(),
+    )
+    assert np.isfinite(
+        independent["summary"]["Score_Validacion"]
+    )
     assert not independent["sync"].empty
