@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""PREDWEEM vK4.9.20: parámetros óptimos, Ke y modulador manuales."""
+"""PREDWEEM vK4.9.21: parámetros óptimos y cobertura de rastrojo manual."""
 from pathlib import Path
 import re
 
@@ -37,7 +37,7 @@ def replace_once(text, pattern, replacement, label, flags=0):
 def patch(text):
     text = text.replace(
         "# 👑 PREDWEEM INTEGRAL vK4.9.15 — LOLIUM PERGAMINO 2026",
-        "# 👑 PREDWEEM INTEGRAL vK4.9.20 — LOLIUM PERGAMINO 2026",
+        "# 👑 PREDWEEM INTEGRAL vK4.9.21 — LOLIUM PERGAMINO 2026",
         1,
     )
     text = text.replace(
@@ -62,7 +62,7 @@ def patch(text):
     )
     text = text.replace(
         "# - SIMULACIÓN: Sin incremento térmico artificial; lag fijo de emergencia de +22 días.",
-        "# - CALIBRACIÓN CV TEMPORAL INTERNA: parámetros del 13/07/2026; lag +40 días.",
+        "# - CALIBRACIÓN CV TEMPORAL INTERNA: parámetros del 13/07/2026; cobertura manual; lag +40 días.",
         1,
     )
 
@@ -114,27 +114,27 @@ LAG_EMERGENCIA_DIAS = int(PARAMETROS_OPTIMOS_CV_TEMPORAL_20260713["lag_dias"])
         re.S,
     )
 
-    manual = '''st.caption("Ke y el modulador térmico se configuran manualmente; los demás parámetros son los óptimos.")
-            col_ke, col_mt = st.columns(2)
-            with col_ke:
-                ke_val = st.number_input(
-                    "Coeficiente hídrico del suelo (Ke)", min_value=0.05,
-                    max_value=1.20, value=0.25, step=0.01, format="%.2f",
-                    help="Valor manual. Referencia del optimizador: 0.10.",
-                )
-            with col_mt:
-                mod_termico = st.number_input(
-                    "Modulador térmico del suelo", min_value=0.50,
-                    max_value=1.20, value=0.85, step=0.01, format="%.2f",
-                    help="Valor manual. Referencia del optimizador: 0.85.",
-                )
-            cobertura_pct = None
+    superficie = '''cobertura_pct = st.slider(
+                "Cobertura de Rastrojo en Suelo (%)",
+                min_value=0,
+                max_value=100,
+                value=70,
+                step=5,
+                help="Control manual de cobertura. Ke y el modulador térmico se calculan con las curvas del modelo original.",
+            )
+            x_cobertura = [0, 30, 70, 100]
+            ke_val = float(np.interp(cobertura_pct, x_cobertura, [0.85, 0.50, 0.25, 0.10]))
+            mod_termico = float(np.interp(cobertura_pct, x_cobertura, [0.95, 0.90, 0.85, 0.80]))
+            st.caption(
+                f"Cobertura manual: {cobertura_pct}% · Ke calculado: {ke_val:.2f} · "
+                f"Modulador térmico calculado: {mod_termico:.2f}"
+            )
 '''
     text = replace_once(
         text,
         r"cobertura_pct = st\.slider\(.*?\n\s*mod_termico = float\(np\.interp\(.*?\)\)\n",
-        manual,
-        "controles manuales",
+        superficie,
+        "control manual de cobertura",
         re.S,
     )
 
@@ -163,9 +163,13 @@ LAG_EMERGENCIA_DIAS = int(PARAMETROS_OPTIMOS_CV_TEMPORAL_20260713["lag_dias"])
 
     panel = '''# --- PARÁMETROS CALIBRADOS ---
 with st.sidebar.expander("🧬 Parámetros óptimos aplicados", expanded=False):
-    st.caption("CV temporal interna con VALIDA.xlsx. Ke y modulador térmico son manuales.")
+    st.caption("CV temporal interna con VALIDA.xlsx. La cobertura de rastrojo es manual; Ke y modulador térmico se derivan de ella.")
     st.dataframe(pd.DataFrame({"Parámetro fijo": list(PARAMETROS_OPTIMOS_CV_TEMPORAL_20260713), "Valor": list(PARAMETROS_OPTIMOS_CV_TEMPORAL_20260713.values())}), width="stretch", hide_index=True)
-    st.write({"Ke manual": float(ke_val), "Modulador térmico manual": float(mod_termico)})
+    st.write({
+        "Cobertura manual (%)": int(cobertura_pct),
+        "Ke calculado": float(ke_val),
+        "Modulador térmico calculado": float(mod_termico),
+    })
 
 # ---------------------------------------------------------
 # 6. MOTOR DE CÁLCULO GENERAL
@@ -194,7 +198,7 @@ with st.sidebar.expander("🧬 Parámetros óptimos aplicados", expanded=False):
         float(PARAMETROS_OPTIMOS_CV_TEMPORAL_20260713["techo_choque"]),
     )
 
-    # 3. Balance hídrico calibrado; Ke es manual.
+    # 3. Balance hídrico calibrado; Ke deriva de la cobertura manual.
     df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=-33.9443)
     df["W_superficial"] = balance_hidrico_superficial(df["Prec"].values, df["ET0"].values, w_max=w_max_val, ke_suelo=ke_val)
     humedad_relativa = df["W_superficial"] / max(w_max_val, 1e-12)
@@ -210,7 +214,7 @@ with st.sidebar.expander("🧬 Parámetros óptimos aplicados", expanded=False):
     ).cummax()
     df.loc[~df["Recarga_Habilitada"], "EMERREL"] = 0.0
 
-    # 4. Termoinhibición calibrada; modulador térmico es manual.
+    # 4. Termoinhibición calibrada; modulador térmico deriva de la cobertura manual.
     ventana_termica = int(PARAMETROS_OPTIMOS_CV_TEMPORAL_20260713["ventana_termica"])
     df["Tmedia"] = df["Tmedia_aire"]
     col_tmedia_movil = f"Tmedia_{ventana_termica}d"
