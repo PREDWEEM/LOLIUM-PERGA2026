@@ -68,7 +68,7 @@ st.markdown("""
 BASE = Path(__file__).parent if "__file__" in globals() else Path.cwd()
 
 UMBRAL_PRIMER_PICO = 0.70
-LAG_EMERGENCIA_DIAS = 0  # Lag fijo: retrasa 22 días la emergencia simulada
+LAG_EMERGENCIA_DIAS = 15  # Lag fijo: retrasa 22 días la emergencia simulada
 
 def set_bg_hack(main_bg_file):
     try:
