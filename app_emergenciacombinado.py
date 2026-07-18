@@ -364,7 +364,7 @@ def optimizar_parametros_hidricos_2d(
     df["TMIN_suelo"] = df["Tmedia_aire"] - (amplitud_termica * 0.90)
     df["ET0"] = calcular_et0_hargreaves(df["Julian_days"].values, df["TMAX"].values, df["TMIN"].values, latitud=latitud_pergamino)
     
-    X = df[["Julian_days", "TMAX_suelo", "TMIN_suelo", "Prec"]].to_numpy(float)
+    X = df[["Julian_days", "TMAX", "TMIN", "Prec"]].to_numpy(float)
     emerrel_raw, _ = modelo_ann.predict(X)
     
     rango_w_max = np.arange(10.0, 36.0, 2.0)
@@ -466,7 +466,7 @@ with st.expander("📂 1. Datos del Lote", expanded=True):
                     <span style="color:#0284c7; font-weight:bold; font-size:1.05rem;">{ke_val:.2f}</span>
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <span style="color:#475569; font-size:0.9rem;">Modulador Térmico Suelo:</span>
+                    <span style="color:#475569; font-size:0.9rem;">Modulador térmico diagnóstico:</span>
                     <span style="color:#b91c1c; font-weight:bold; font-size:1.05rem;">{mod_termico:.2f}</span>
                 </div>
             </div>
@@ -560,7 +560,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df['Fecha'] = pd.to_datetime(df['Fecha'])
     df = df.dropna(subset=["Fecha", "TMAX", "TMIN", "Prec"]).sort_values("Fecha").reset_index(drop=True)
     
-    # Sin incremento térmico artificial.
+    # Sin incremento térmico artificial en la ANN; TMAX y TMIN son del aire.
     df["Julian_days"] = df["Fecha"].dt.dayofyear
     df["Tmedia_aire"] = (df["TMAX"] + df["TMIN"]) / 2
     amplitud_termica = (df["TMAX"] - df["TMIN"]) / 2
@@ -577,7 +577,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
         max_plm2 = df_campo[col_plm2].max()
         df_campo['Campo_Normalizado'] = df_campo[col_plm2] / max_plm2 if max_plm2 > 0 else 0
 
-    X = df[["Julian_days", "TMAX_suelo", "TMIN_suelo", "Prec"]].to_numpy(float)
+    X = df[["Julian_days", "TMAX", "TMIN", "Prec"]].to_numpy(float)
     emerrel_raw, _ = modelo_ann.predict(X)
     df["EMERREL"] = np.maximum(emerrel_raw, 0.0)
 
