@@ -1,0 +1,29 @@
+# Credenciales y configuración local
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.venv/
+venv/
+
+# Sistemas operativos y editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Archivos temporales y exportaciones locales
+*.tmp
+*.log
+~$*.xlsx
+PREDWEEM_*_Resultados_Completos.xlsx
