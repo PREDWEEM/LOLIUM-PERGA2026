@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
-"""
-Punto de entrada de PREDWEEM Pergamino.
+"""Punto de entrada privado de PREDWEEM Pergamino.
 
-La aplicación científica original se conserva en
-``app_emergenciacombinado_core.py``. Este archivo la ejecuta sin alterar su
-lógica y agrega, al final de toda la interfaz, una descarga Excel completa de
-los resultados generados.
+La aplicación científica se conserva en ``app_emergenciacombinado_core.py``.
+Antes de ejecutarla, ``private_runtime`` reemplaza las dependencias públicas por
+recursos del checkout privado y verifica la presencia de los activos reales.
+Al final de la interfaz se agrega la descarga Excel completa de resultados.
 """
+
 from pathlib import Path
 
+from private_runtime import build_private_core_source
+
+
 _CORE_APP = Path(__file__).with_name("app_emergenciacombinado_core.py")
+_PRIVATE_CORE_SOURCE = build_private_core_source(_CORE_APP)
 exec(
-    compile(_CORE_APP.read_text(encoding="utf-8"), str(_CORE_APP), "exec"),
+    compile(_PRIVATE_CORE_SOURCE, str(_CORE_APP), "exec"),
     globals(),
 )
 
