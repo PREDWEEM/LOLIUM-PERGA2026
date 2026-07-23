@@ -8,10 +8,15 @@ on:
       - "app_emergenciacombinado_core.py"
       - "private_runtime.py"
       - "requirements.txt"
+      - "README.md"
+      - "PRIVATE_REPOSITORY.md"
+      - ".gitignore"
       - "logo_predweem.svg"
+      - "fondo_predweem_v3.png"
       - "meteo_daily.csv"
       - "*.npy"
       - "*.pkl"
+      - ".github/workflows/actualizar_meteo.yml"
       - ".github/workflows/verificar_despliegue_privado.yml"
 
 permissions:
@@ -20,6 +25,7 @@ permissions:
 jobs:
   verificar:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Descargar repositorio
