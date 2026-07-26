@@ -152,7 +152,7 @@ if "df" in globals() and isinstance(df, pd.DataFrame) and not df.empty:
             "Valor": [
                 -33.9443,
                 -60.5745,
-                45,
+                25,
                 5,
                 globals().get("umbral_termoinhibicion", ""),
                 3,
