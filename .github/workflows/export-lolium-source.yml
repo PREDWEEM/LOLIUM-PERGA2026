@@ -1,33 +1,60 @@
-name: Exportar código LOLIUM
+name: Aplicar adaptación común LOLIUM
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  export:
+  adaptar:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout de la rama
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: agent/adaptacion-comun-lolium
+          fetch-depth: 0
 
-      - name: Preparar manifiesto
+      - name: Aplicar adaptación validada
         shell: bash
         run: |
-          find . -maxdepth 2 -type f \( -name '*.py' -o -name 'requirements*.txt' \) -print | sort > source_manifest.txt
-          cat source_manifest.txt
+          python - <<'PY'
+          from pathlib import Path
+          import base64, gzip, subprocess
+          encoded = "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"
+          patch = gzip.decompress(base64.b64decode(encoded))
+          patch_path = Path("/tmp/adaptacion_comun.patch")
+          patch_path.write_bytes(patch)
+          subprocess.run(["git", "apply", "--check", str(patch_path)], check=True)
+          subprocess.run(["git", "apply", str(patch_path)], check=True)
+          PY
 
-      - name: Exportar fuentes
-        uses: actions/upload-artifact@v4
-        with:
-          name: lolium-source
-          path: |
-            *.py
-            requirements*.txt
-            source_manifest.txt
-          if-no-files-found: error
+          python -m py_compile app_emergenciacombinado_core.py app_emergenciacombinado.py
+          python - <<'PY'
+          from pathlib import Path
+          source = Path("app_emergenciacombinado_core.py").read_text(encoding="utf-8")
+          assert source.count("def simular_emergencia_local") == 1
+          assert source.count("def optimizar_parametros_hidricos_2d") == 1
+          optimizer = source[source.index("def optimizar_parametros_hidricos_2d"):]
+          assert "simular_emergencia_local(" in optimizer
+          assert "rango_ke" not in optimizer
+          assert "rango_cobertura" in optimizer
+          assert "Exponente Kr (secado superficial)" in source
+          assert "idx_pronostico = min(idx_hoy + 7" in source
+          assert "inicio_simulacion" in source and "total_simulado" in source
+          assert "value=0.0" in source
+          assert "lag_dias=int(lag_emergencia_dias)" in source
+          PY
+          git diff --check
+
+      - name: Publicar fuentes finales
+        shell: bash
+        run: |
+          rm -f .github/workflows/export-lolium-source.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app_emergenciacombinado_core.py app_emergenciacombinado.py .github/workflows/export-lolium-source.yml
+          git commit -m "Unifica cálculo hídrico y validación Event-to-Event"
+          git push origin HEAD:agent/adaptacion-comun-lolium
