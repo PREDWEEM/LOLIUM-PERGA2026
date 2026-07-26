@@ -136,6 +136,68 @@ validate_required_private_assets()''',
 
     source = _replace_once(
         source,
+        r"    with col_upload:\n.*?\n    with col_rastrojo:",
+        '''    with col_upload:
+        st.markdown("#### ☁️ Datos Climáticos")
+        modo_meteo = st.radio(
+            "Fuente de datos meteorológicos",
+            options=["Automática", "Carga manual"],
+            index=0,
+            horizontal=True,
+            help=(
+                "Automática usa meteo_daily del repositorio privado. "
+                "Carga manual permite usar un archivo CSV, XLSX o XLS."
+            ),
+        )
+
+        archivo_meteo = None
+        if modo_meteo == "Carga manual":
+            archivo_meteo = st.file_uploader(
+                "Cargar datos meteorológicos",
+                type=["csv", "xlsx", "xls"],
+                key="archivo_meteo_manual",
+                help=(
+                    "Columnas requeridas: FECHA o Fecha, TMAX, TMIN "
+                    "y PREC o LLUVIA."
+                ),
+            )
+            if archivo_meteo is None:
+                st.warning(
+                    "Seleccione un archivo meteorológico para ejecutar "
+                    "la simulación en modo manual."
+                )
+            else:
+                st.success(f"Archivo meteorológico cargado: {archivo_meteo.name}")
+        else:
+            st.info("🔄 Carga automática de clima activada.")
+
+        st.markdown("#### 🌱 Datos de Validación")
+        archivo_campo = st.file_uploader(
+            "Opcional: Cargar archivo manual de Campo",
+            type=["xlsx", "csv"],
+        )
+
+    with col_rastrojo:''',
+        "selector de carga meteorológica",
+        flags=re.DOTALL,
+    )
+
+    source = _replace_once(
+        source,
+        r'df_meteo_raw = load_data\(None, "meteo_daily"\)',
+        '''if modo_meteo == "Carga manual":
+    df_meteo_raw = (
+        load_data(archivo_meteo, "meteo_daily")
+        if archivo_meteo is not None
+        else None
+    )
+else:
+    df_meteo_raw = load_data(None, "meteo_daily")''',
+        "selección de fuente meteorológica",
+    )
+
+    source = _replace_once(
+        source,
         r'st\.sidebar\.image\("https://raw\.githubusercontent\.com/PREDWEEM/LOLIUM-PERGA2026/main/logo\.png", width="stretch"\)',
         'st.sidebar.image(str(BASE / "logo_predweem.svg"), width="stretch")',
         "carga local del logotipo",
