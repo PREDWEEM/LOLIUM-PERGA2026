@@ -101,7 +101,8 @@ validate_required_private_assets()''',
 
     source = _replace_once(
         source,
-        r"def load_data\(file_uploader, default_name\):.*?\n\ndef sincronizar_intervalos_variables",
+        r"^def load_data\(file_uploader, default_name\):"
+        r".*?(?=^def |\Z)",
         '''def load_data(file_uploader, default_name):
     """Carga archivos aportados por el usuario o recursos del checkout privado."""
     if file_uploader:
@@ -128,9 +129,9 @@ validate_required_private_assets()''',
     return None
 
 
-def sincronizar_intervalos_variables''',
+''',
         "carga local de datos",
-        flags=re.DOTALL,
+        flags=re.DOTALL | re.MULTILINE,
     )
 
     source = _replace_once(
