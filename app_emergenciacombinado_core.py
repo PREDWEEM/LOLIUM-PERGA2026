@@ -7,7 +7,7 @@
 # - LATENCIA INICIAL: Bloqueo estricto de emergencia los primeros 45 días del año.
 # - ESCUDO TERMOFISIOLÓGICO: Horizonte de termoinhibición dinámico ajustado a 5 días.
 # - CHOQUE HÍDRICO: Umbral acumulado de 3 días fijado en 45 mm.
-# - PRIMER PICO VÁLIDO: La campaña se habilita únicamente cuando EMERREL > 0.70.
+# - PRIMER PICO VÁLIDO: La campaña se habilita únicamente cuando EMERREL > 0.20.
 # - ESPECÍFICO PERGAMINO: Bypass por choque hídrico temprano limitado a un techo de 0.75.
 # - ESPECÍFICO PERGAMINO: Techo estricto 0-1 de tasa diaria (Patrón de agotamiento deshabilitado).
 # - VALIDACIÓN POR EVENTO REAL: Incorporación del método de Integración Dinámica por
@@ -67,7 +67,7 @@ st.markdown("""
 
 BASE = Path(__file__).parent if "__file__" in globals() else Path.cwd()
 
-UMBRAL_PRIMER_PICO = 0.70
+UMBRAL_PRIMER_PICO = 0.20
 LAG_EMERGENCIA_DIAS = 15  # Lag fijo: retrasa 22 días la emergencia simulada
 
 def set_bg_hack(main_bg_file):
@@ -608,7 +608,7 @@ if df_meteo_raw is not None and modelo_ann is not None:
     df["EMERREL"] = np.clip(df["EMERREL"], 0, 1.0)
 
     # 5. Validación del primer pico
-    # La campaña comienza en el primer valor estrictamente superior a 0.70.
+    # La campaña comienza en el primer valor estrictamente superior a 0.20.
     df, idx_primer_pico_original = aplicar_filtro_primer_pico(
         df,
         umbral=UMBRAL_PRIMER_PICO
