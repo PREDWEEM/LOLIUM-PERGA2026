@@ -44,7 +44,17 @@ El procedimiento completo se encuentra en [PRIVATE_REPOSITORY.md](PRIVATE_REPOSI
 
 ## Automatización meteorológica
 
-El workflow **Actualizar SIGA Pergamino y ECMWF ENS** descarga y consolida observaciones de SIGA–INTA y pronósticos ECMWF ENS. La automatización utiliza permisos internos de GitHub Actions y está preparada para continuar funcionando luego del cambio de visibilidad, siempre que Actions permanezca habilitado.
+El workflow **Actualizar SIGA Pergamino y ECMWF ENS** construye una serie diaria continua mediante la siguiente jerarquía:
+
+1. **SIGA–INTA Pergamino (`A872814`)** como fuente observada prioritaria.
+2. **ECMWF IFS histórico** como reemplazo provisional de cualquier fecha vencida sin una observación SIGA completa y válida.
+3. **ECMWF IFS ENS 0,25°** para hoy y los próximos seis días, utilizando P50 como valor operativo de Tmax, Tmin, Tmedia y precipitación.
+
+Las observaciones SIGA con Tmax y Tmin válidas pero sin Tmedia conservan su condición observada y utilizan `TMEDIA = (TMAX + TMIN) / 2`. En cambio, una precipitación ausente nunca se interpreta como 0 mm: la fila incompleta se excluye del tramo observado y su fecha pasa al puente provisional ECMWF.
+
+El ensamble exige 24 horas válidas por miembro y día, empareja temperatura y precipitación mediante el identificador real del miembro y requiere al menos 30 miembros válidos y el 80 % de los miembros disponibles. Las medias, P10, P50 y P90 se conservan para auditoría.
+
+Antes de guardar `meteo_daily.csv`, GitHub Actions verifica continuidad diaria, ausencia de nulos críticos, coherencia física, ubicación temporal de observaciones/provisionales/pronósticos, correspondencia exacta de las variables operativas con P50 y cantidad mínima de miembros.
 
 Antes y después de privatizar debe ejecutarse manualmente el workflow **Verificar despliegue privado**.
 
