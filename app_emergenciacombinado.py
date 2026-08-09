@@ -10,6 +10,7 @@ Al final de la interfaz se agrega la descarga Excel completa de resultados.
 from pathlib import Path
 
 from private_runtime import build_private_core_source
+from visualizacion_horizonte_pronostico import mostrar_horizonte_pronostico
 
 
 _CORE_APP = Path(__file__).with_name("app_emergenciacombinado_core.py")
@@ -18,6 +19,10 @@ exec(
     compile(_PRIVATE_CORE_SOURCE, str(_CORE_APP), "exec"),
     globals(),
 )
+
+if "df" in globals() and isinstance(df, pd.DataFrame) and not df.empty:
+    st.divider()
+    mostrar_horizonte_pronostico(df, "Pergamino")
 
 
 def _fecha_reporte(valor):
@@ -31,7 +36,6 @@ def _escribir_hoja(writer, dataframe, nombre):
     """Escribe una hoja y aplica un formato básico de lectura."""
     if not isinstance(dataframe, pd.DataFrame) or dataframe.empty:
         return
-
     dataframe.to_excel(writer, sheet_name=nombre, index=False)
     hoja = writer.sheets[nombre]
     ultima_fila = len(dataframe)
@@ -41,42 +45,28 @@ def _escribir_hoja(writer, dataframe, nombre):
     hoja.set_column(0, ultima_columna, 18)
 
 
-# El botón final se muestra únicamente si el motor completó la simulación.
 if "df" in globals() and isinstance(df, pd.DataFrame) and not df.empty:
     reporte_excel_final = io.BytesIO()
 
     resumen_decision = pd.DataFrame(
         {
             "Indicador": [
-                "Localidad",
-                "Fecha de generación",
-                "Inicio del conteo térmico",
-                "Fecha objetivo de control",
-                "Fecha límite de la ventana",
-                "TT acumulado actual (°Cd)",
-                "TT pronosticado +7 días (°Cd)",
-                "Estado operativo",
-                "Cobertura de rastrojo (%)",
-                "Wmax superficial (mm)",
-                "Ke aplicado",
-                "Exponente Kr configurable",
-                "Lag fijo de emergencia (días)",
+                "Localidad", "Fecha de generación", "Inicio del conteo térmico",
+                "Fecha objetivo de control", "Fecha límite de la ventana",
+                "TT acumulado actual (°Cd)", "TT pronosticado +7 días (°Cd)",
+                "Estado operativo", "Cobertura de rastrojo (%)", "Wmax superficial (mm)",
+                "Ke aplicado", "Exponente Kr configurable", "Lag fijo de emergencia (días)",
                 "Días de estrés térmico post-pico",
             ],
             "Valor": [
-                "Pergamino (Buenos Aires)",
-                pd.Timestamp.now().strftime("%d/%m/%Y %H:%M"),
+                "Pergamino (Buenos Aires)", pd.Timestamp.now().strftime("%d/%m/%Y %H:%M"),
                 _fecha_reporte(globals().get("fecha_inicio_ventana")),
                 _fecha_reporte(globals().get("fecha_control")),
                 _fecha_reporte(globals().get("fecha_limite")),
-                globals().get("dga_hoy", 0.0),
-                globals().get("dga_7dias", 0.0),
-                globals().get("msg_estado", ""),
-                globals().get("cobertura_pct", ""),
-                globals().get("w_max_val", ""),
-                globals().get("ke_val", ""),
-                globals().get("exponente_kr", ""),
-                globals().get("LAG_EMERGENCIA_DIAS", ""),
+                globals().get("dga_hoy", 0.0), globals().get("dga_7dias", 0.0),
+                globals().get("msg_estado", ""), globals().get("cobertura_pct", ""),
+                globals().get("w_max_val", ""), globals().get("ke_val", ""),
+                globals().get("exponente_kr", ""), globals().get("LAG_EMERGENCIA_DIAS", ""),
                 globals().get("dias_stress", 0),
             ],
         }
@@ -85,41 +75,21 @@ if "df" in globals() and isinstance(df, pd.DataFrame) and not df.empty:
     metricas_reporte = pd.DataFrame(
         {
             "Métrica": [
-                "PEC (%)",
-                "Lag control vs. pico de campo (días)",
-                "Lead time (días)",
-                "Pearson de flujos",
-                "NSE de flujos",
-                "KGE de flujos",
-                "RMSE acumulado",
-                "R2 acumulado",
-                "CCC acumulado",
-                "Desfase T50 (días)",
-                "F1-Score de coincidencia",
-                "Exactitud global",
-                "Hits",
-                "Misses",
-                "Falsos positivos",
-                "Correctos negativos",
-                "Desfase del primer flujo (días)",
+                "PEC (%)", "Lag control vs. pico de campo (días)", "Lead time (días)",
+                "Pearson de flujos", "NSE de flujos", "KGE de flujos", "RMSE acumulado",
+                "R2 acumulado", "CCC acumulado", "Desfase T50 (días)",
+                "F1-Score de coincidencia", "Exactitud global", "Hits", "Misses",
+                "Falsos positivos", "Correctos negativos", "Desfase del primer flujo (días)",
             ],
             "Valor": [
-                globals().get("pec", 0.0),
-                globals().get("peak_lag", 0),
-                globals().get("lead_time", 0),
-                globals().get("pearson_r", 0.0),
-                globals().get("nse_flujos", 0.0),
-                globals().get("kge_flujos", 0.0),
-                globals().get("rmse_acum", 0.0),
-                globals().get("r2_acum", 0.0),
-                globals().get("ccc_acum", 0.0),
-                globals().get("desfase_t50", 0),
-                globals().get("f1_score_coincidencia", 0.0),
-                globals().get("exactitud_global", 0.0),
-                globals().get("hits_val", 0),
-                globals().get("misses_val", 0),
-                globals().get("falsos_pos_val", 0),
-                globals().get("correctos_neg_val", 0),
+                globals().get("pec", 0.0), globals().get("peak_lag", 0),
+                globals().get("lead_time", 0), globals().get("pearson_r", 0.0),
+                globals().get("nse_flujos", 0.0), globals().get("kge_flujos", 0.0),
+                globals().get("rmse_acum", 0.0), globals().get("r2_acum", 0.0),
+                globals().get("ccc_acum", 0.0), globals().get("desfase_t50", 0),
+                globals().get("f1_score_coincidencia", 0.0), globals().get("exactitud_global", 0.0),
+                globals().get("hits_val", 0), globals().get("misses_val", 0),
+                globals().get("falsos_pos_val", 0), globals().get("correctos_neg_val", 0),
                 globals().get("lag_inicio_dias", "N/A"),
             ],
         }
@@ -128,91 +98,40 @@ if "df" in globals() and isinstance(df, pd.DataFrame) and not df.empty:
     parametros_reporte = pd.DataFrame(
         {
             "Parámetro": [
-                "Latitud",
-                "Longitud",
-                "Latencia fija (JD)",
-                "Ventana termoinhibición (días)",
-                "Umbral termoinhibición (°C)",
-                "Ventana de lluvia (días)",
-                "Choque hídrico (mm)",
-                "Fin choque hídrico (JD)",
-                "Techo del bypass hídrico",
-                "Umbral del primer pico",
-                "Lag fijo de emergencia (días)",
-                "Cobertura de rastrojo (%)",
-                "Wmax superficial (mm)",
-                "Ke",
-                "Exponente Kr",
-                "Modulador térmico diagnóstico",
-                "Temperatura base (°C)",
-                "Temperatura óptima (°C)",
-                "Temperatura crítica (°C)",
-                "TT objetivo de control (°Cd)",
-                "TT límite de ventana (°Cd)",
-                "Residualidad del herbicida (días)",
+                "Latitud", "Longitud", "Latencia fija (JD)", "Ventana termoinhibición (días)",
+                "Umbral termoinhibición (°C)", "Ventana de lluvia (días)", "Choque hídrico (mm)",
+                "Fin choque hídrico (JD)", "Techo del bypass hídrico", "Umbral del primer pico",
+                "Lag fijo de emergencia (días)", "Cobertura de rastrojo (%)", "Wmax superficial (mm)",
+                "Ke", "Exponente Kr", "Modulador térmico diagnóstico", "Temperatura base (°C)",
+                "Temperatura óptima (°C)", "Temperatura crítica (°C)", "TT objetivo de control (°Cd)",
+                "TT límite de ventana (°Cd)", "Residualidad del herbicida (días)",
                 "Umbral de alerta temprana",
             ],
             "Valor": [
-                -33.9443,
-                -60.5745,
-                25,
-                5,
-                globals().get("umbral_termoinhibicion", ""),
-                3,
-                globals().get("umbral_choque_hidrico", ""),
-                110,
-                0.75,
-                globals().get("UMBRAL_PRIMER_PICO", ""),
-                globals().get("LAG_EMERGENCIA_DIAS", ""),
-                globals().get("cobertura_pct", ""),
-                globals().get("w_max_val", ""),
-                globals().get("ke_val", ""),
-                globals().get("exponente_kr", ""),
-                globals().get("mod_termico", ""),
-                globals().get("t_base_val", ""),
-                globals().get("t_opt_max", ""),
-                globals().get("t_critica", ""),
-                globals().get("dga_optimo", ""),
-                globals().get("dga_critico", ""),
-                globals().get("residualidad", ""),
-                globals().get("umbral_er", ""),
+                -33.9443, -60.5745, 25, 5, globals().get("umbral_termoinhibicion", ""), 3,
+                globals().get("umbral_choque_hidrico", ""), 110, 0.75,
+                globals().get("UMBRAL_PRIMER_PICO", ""), globals().get("LAG_EMERGENCIA_DIAS", ""),
+                globals().get("cobertura_pct", ""), globals().get("w_max_val", ""),
+                globals().get("ke_val", ""), globals().get("exponente_kr", ""),
+                globals().get("mod_termico", ""), globals().get("t_base_val", ""),
+                globals().get("t_opt_max", ""), globals().get("t_critica", ""),
+                globals().get("dga_optimo", ""), globals().get("dga_critico", ""),
+                globals().get("residualidad", ""), globals().get("umbral_er", ""),
             ],
         }
     )
 
-    with pd.ExcelWriter(
-        reporte_excel_final,
-        engine="xlsxwriter",
-        datetime_format="dd/mm/yyyy",
-        date_format="dd/mm/yyyy",
-    ) as writer:
+    with pd.ExcelWriter(reporte_excel_final, engine="xlsxwriter", datetime_format="dd/mm/yyyy", date_format="dd/mm/yyyy") as writer:
         _escribir_hoja(writer, df, "Resultados_Diarios")
-        _escribir_hoja(
-            writer,
-            globals().get("df_sincronizado"),
-            "Validacion_Intervalos",
-        )
-        _escribir_hoja(
-            writer,
-            globals().get("df_campo"),
-            "Observaciones_Campo",
-        )
+        _escribir_hoja(writer, globals().get("df_sincronizado"), "Validacion_Intervalos")
+        _escribir_hoja(writer, globals().get("df_campo"), "Observaciones_Campo")
         _escribir_hoja(writer, resumen_decision, "Resumen_Decision")
         _escribir_hoja(writer, metricas_reporte, "Metricas_Validacion")
         _escribir_hoja(writer, parametros_reporte, "Parametros_Modelo")
-        _escribir_hoja(
-            writer,
-            globals().get("df_desde_pico"),
-            "Tiempo_Termico",
-        )
-        _escribir_hoja(
-            writer,
-            globals().get("tabla_optima"),
-            "Optimizador_2D",
-        )
+        _escribir_hoja(writer, globals().get("df_desde_pico"), "Tiempo_Termico")
+        _escribir_hoja(writer, globals().get("tabla_optima"), "Optimizador_2D")
 
     reporte_excel_final.seek(0)
-
     st.divider()
     st.subheader("📥 Descarga final de resultados")
     st.caption(
@@ -224,10 +143,7 @@ if "df" in globals() and isinstance(df, pd.DataFrame) and not df.empty:
         label="📊 Descargar resultados completos en Excel",
         data=reporte_excel_final.getvalue(),
         file_name="PREDWEEM_Pergamino_Resultados_Completos.xlsx",
-        mime=(
-            "application/vnd.openxmlformats-officedocument."
-            "spreadsheetml.sheet"
-        ),
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         width="stretch",
         key="descarga_excel_resultados_final_pergamino",
     )
