@@ -1,13 +1,19 @@
 {
-  "ejecucion_utc": "2026-09-04T14:52:55+00:00",
+  "ejecucion_utc": "2026-09-04T20:57:51+00:00",
   "sitio": "Pergamino",
   "latitud": -33.9443,
   "longitud": -60.5745,
   "estacion_siga": "A872814",
-  "estado_siga": "SIGA_cache",
+  "estado_siga": "SIGA_remoto",
   "ultima_observacion_siga": "2026-09-01",
   "tmedia_siga_derivada": [],
-  "observaciones_siga_descartadas": [],
+  "observaciones_siga_descartadas": [
+    "2026-01-01",
+    "2026-01-02",
+    "2026-01-03",
+    "2026-01-04",
+    "2026-01-06"
+  ],
   "huecos_siga": [
     "2026-01-01",
     "2026-01-02",
