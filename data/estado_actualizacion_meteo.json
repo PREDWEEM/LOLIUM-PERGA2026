@@ -1,5 +1,5 @@
 {
-  "ejecucion_utc": "2026-09-04T20:57:51+00:00",
+  "ejecucion_utc": "2026-09-05T13:36:24+00:00",
   "sitio": "Pergamino",
   "latitud": -33.9443,
   "longitud": -60.5745,
@@ -21,7 +21,8 @@
     "2026-01-04",
     "2026-01-06",
     "2026-09-02",
-    "2026-09-03"
+    "2026-09-03",
+    "2026-09-04"
   ],
   "rangos_provisionales": [
     {
@@ -34,15 +35,15 @@
     },
     {
       "inicio": "2026-09-02",
-      "fin": "2026-09-03"
+      "fin": "2026-09-04"
     }
   ],
   "fuente_provisional": "ECMWF_IFS_HISTORICO",
-  "filas_provisionales": 7,
+  "filas_provisionales": 8,
   "fuente_pronostico": "ECMWF_IFS_ENS_025",
   "estadistico_operativo": "P50",
-  "inicio_pronostico": "2026-09-04",
-  "fin_pronostico": "2026-09-10",
+  "inicio_pronostico": "2026-09-05",
+  "fin_pronostico": "2026-09-11",
   "miembros_validos_min": 51,
   "huecos_finales": []
 }
