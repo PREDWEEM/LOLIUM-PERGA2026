@@ -1,11 +1,11 @@
 {
-  "ejecucion_utc": "2026-09-06T20:43:43+00:00",
+  "ejecucion_utc": "2026-09-07T16:00:05+00:00",
   "sitio": "Pergamino",
   "latitud": -33.9443,
   "longitud": -60.5745,
   "estacion_siga": "A872814",
   "estado_siga": "SIGA_remoto",
-  "ultima_observacion_siga": "2026-09-01",
+  "ultima_observacion_siga": "2026-09-06",
   "tmedia_siga_derivada": [],
   "observaciones_siga_descartadas": [
     "2026-01-01",
@@ -19,11 +19,7 @@
     "2026-01-02",
     "2026-01-03",
     "2026-01-04",
-    "2026-01-06",
-    "2026-09-02",
-    "2026-09-03",
-    "2026-09-04",
-    "2026-09-05"
+    "2026-01-06"
   ],
   "rangos_provisionales": [
     {
@@ -33,18 +29,14 @@
     {
       "inicio": "2026-01-06",
       "fin": "2026-01-06"
-    },
-    {
-      "inicio": "2026-09-02",
-      "fin": "2026-09-05"
     }
   ],
   "fuente_provisional": "ECMWF_IFS_HISTORICO",
-  "filas_provisionales": 9,
+  "filas_provisionales": 5,
   "fuente_pronostico": "ECMWF_IFS_ENS_025",
   "estadistico_operativo": "P50",
-  "inicio_pronostico": "2026-09-06",
-  "fin_pronostico": "2026-09-12",
+  "inicio_pronostico": "2026-09-07",
+  "fin_pronostico": "2026-09-13",
   "miembros_validos_min": 51,
   "huecos_finales": []
 }
