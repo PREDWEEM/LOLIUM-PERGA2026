@@ -60,6 +60,7 @@ jobs:
 
           import numpy as np
           import pandas as pd
+          from actualizar_meteo_pergamino import CAMPANIA_END
 
           archivo = Path("meteo_daily.csv")
           estado_path = Path("data/estado_actualizacion_meteo.json")
@@ -134,7 +135,9 @@ jobs:
           observado = df["TipoDato"].astype(str).eq("Observado")
           provisional = df["TipoDato"].astype(str).eq("Provisional")
           pronostico = df["TipoDato"].astype(str).eq("Pronostico")
-          if not pronostico.any():
+          if (df["Fecha"].dt.date > CAMPANIA_END).any():
+              raise SystemExit("Hay fechas posteriores al 1 de octubre de 2026.")
+          if not pronostico.any() and hoy.date() <= CAMPANIA_END:
               raise SystemExit("No hay filas de pronóstico.")
           if (
               (df.loc[observado | provisional, "Fecha"] >= hoy).any()
