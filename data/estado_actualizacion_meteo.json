@@ -1,5 +1,5 @@
 {
-  "ejecucion_utc": "2026-09-18T14:36:42+00:00",
+  "ejecucion_utc": "2026-09-18T21:10:02+00:00",
   "sitio": "Pergamino",
   "latitud": -33.9443,
   "longitud": -60.5745,
@@ -38,6 +38,7 @@
   ],
   "fuente_provisional": "ECMWF_IFS_HISTORICO",
   "filas_provisionales": 6,
+  "fecha_fin_campania": "2026-10-01",
   "fuente_pronostico": "ECMWF_IFS_ENS_025",
   "estadistico_operativo": "P50",
   "inicio_pronostico": "2026-09-18",
