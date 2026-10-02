@@ -6,6 +6,7 @@
 # - IDENTIDAD: PREDWEEM by GUILLERMO R. CHANTRE.
 # - LATENCIA INICIAL: Bloqueo estricto de emergencia los primeros 25 días del año.
 # - ESCUDO TERMOFISIOLÓGICO: Horizonte de termoinhibición dinámico ajustado a 5 días.
+#   Umbral por defecto 26 °C (antes 20 °C en la app y 24 °C en las funciones).
 # - CHOQUE HÍDRICO: Umbral acumulado de 3 días fijado en 45 mm.
 # - PRIMER PICO VÁLIDO: La campaña se habilita únicamente cuando EMERREL > 0.20.
 # - ESPECÍFICO PERGAMINO: Bypass por choque hídrico temprano limitado a un techo de 0.75.
@@ -268,7 +269,7 @@ def simular_emergencia_local(
     modelo_ann,
     cobertura_pct,
     w_max,
-    umbral_termoinhibicion=24.0,
+    umbral_termoinhibicion=26.0,
     umbral_choque_hidrico=45.0,
     exponente_kr=0.0,
     latitud=-33.9443,
@@ -526,7 +527,7 @@ def optimizar_parametros_hidricos_2d(
     modelo_ann,
     latitud_local=-33.9443,
     umbral_choque_hidrico=45.0,
-    umbral_termoinhibicion=24.0,
+    umbral_termoinhibicion=26.0,
     exponente_kr=0.0,
     calentamiento_suelo=0.0,
     tau_decaimiento=None,
@@ -635,7 +636,10 @@ df_campo_raw = load_data(archivo_campo, "pergamino_campo")
 st.sidebar.image("https://raw.githubusercontent.com/PREDWEEM/LOLIUM-PERGA2026/main/logo.png", width="stretch")
 st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")
 umbral_er = st.sidebar.slider("Umbral Tasa Diaria", 0.0001, 0.80, 0.0001)
-umbral_termoinhibicion = st.sidebar.number_input("Umbral Termoinhibición (°C)", 15.0, 35.0, 20.0, 0.5)
+umbral_termoinhibicion = st.sidebar.number_input(
+    "Umbral Termoinhibición (°C)", 15.0, 35.0, 26.0, 0.5,
+    help="Valor por defecto 26 °C (antes 20 °C). Validado contra Pergamino 2024 (curva Red DIMA) y 2026 (conteos propios); ver README.",
+)
 umbral_choque_hidrico = st.sidebar.slider(
     "Choque Hídrico 3 días (mm)",
     min_value=10.0,
