@@ -69,6 +69,21 @@ observación de ese día cuando se publique y reemplazar datos provisionales.
 La validación admite una serie cerrada sin pronóstico y rechaza fechas
 posteriores al cierre. Los archivos históricos existentes se conservan.
 
+## Umbral de termoinhibición por defecto: 26 °C
+
+El valor por defecto pasa de 20 °C (interfaz) y 24 °C (funciones del motor) a **26 °C**, en línea con los repositorios de Tres Arroyos, Lartigau, Azul y Bordenave.
+
+Evidencia (motor de este repositorio, cobertura 80 %, Wmax 18,81 mm, lag 15 días, choque hídrico 45 mm; TVD = masa de emergencia mal ubicada, menor es mejor):
+
+| Umbral | Pergamino 2024 (curva Red DIMA digitalizada) | Pergamino 2026 (conteos propios, desde el 01/04) |
+|---|---|---|
+| 20 °C (anterior, interfaz) | 74,4 % | 58,2 % |
+| 24 °C | 41,3 % | 47,8 % |
+| **26 °C** | **30,5 %** | **47,8 %** |
+| 28 °C | 28,5 % | 44,2 % |
+
+Limitaciones: son dos campañas. La de 2024 es una curva relativa suavizada leída de un gráfico (Boletín #3 de Red DIMA, AAPPCE; incertidumbre de lectura ≈ ±3 pp) y no hay réplicas; la de 2026 es una sola serie sin réplicas. Los umbrales de 28 °C o más mejoran algo más pero equivalen a casi anular la regla y no se adoptan sin más campañas. El ajuste no corrige la emergencia de mayo–junio 2026 (ocurrida con lluvia casi nula), por lo que el modelo no debe considerarse validado para Pergamino. El lag fijo de 15 días no se modificó: mejora 2026 y empeora 2024.
+
 ## Condiciones de uso
 
 No se concede licencia de uso por el solo hecho de acceder al repositorio. Cualquier utilización académica, técnica, institucional o comercial que exceda la visualización del contenido requiere autorización previa y escrita del titular de los derechos correspondientes.
