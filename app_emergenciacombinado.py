@@ -147,7 +147,16 @@ NOTA_PERGAMINO = (
 if "df_meteo_raw" in globals() and isinstance(df_meteo_raw, pd.DataFrame) and not df_meteo_raw.empty:
     st.divider()
     try:
-        from visualizacion_alerta_lolmu import mostrar_alerta_lolmu
+        import importlib
+
+        import alerta_lolmu as _alerta_lolmu
+        import visualizacion_alerta_lolmu as _vis_alerta
+
+        # Streamlit conserva en memoria los módulos ya importados entre ejecuciones: tras una actualización del
+        # repositorio, recargarlos evita usar una versión vieja (p. ej. sin la opción tope_sin_inicio)
+        importlib.reload(_alerta_lolmu)
+        importlib.reload(_vis_alerta)
+        mostrar_alerta_lolmu = _vis_alerta.mostrar_alerta_lolmu
 
         _resultados_alerta = mostrar_alerta_lolmu(
             df_meteo_raw,
