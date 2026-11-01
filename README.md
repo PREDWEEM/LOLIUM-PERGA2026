@@ -58,9 +58,9 @@ Antes de guardar `meteo_daily.csv`, GitHub Actions verifica continuidad diaria, 
 
 Antes y después de privatizar debe ejecutarse manualmente el workflow **Verificar despliegue privado**.
 
-### Fin de carga de la campaña 2026
+### Fin de carga de cada campaña
 
-La última fecha meteorológica es el **1 de octubre de 2026, inclusive**.
+La última fecha meteorológica de cada campaña es el **1 de octubre, inclusive** (en 2026, el 1/10/2026). El 1 de enero siguiente comienza la campaña nueva (`_campania_vigente()` en `actualizar_meteo_pergamino.py`): mientras SIGA no publica días del año, el puente provisional ECMWF los cubre, y la caché SIGA se limita a la campaña vigente.
 El pronóstico de siete días se recorta al alcanzar ese límite, tanto en la
 serie operativa como en los nuevos archivos de pronóstico. Desde el 2 de
 octubre no se consulta el ensamble; las actualizaciones de SIGA y del puente
@@ -83,6 +83,35 @@ Evidencia (motor de este repositorio, cobertura 80 %, Wmax 18,81 mm, lag 15 día
 | 28 °C | 28,5 % | 44,2 % |
 
 Limitaciones: son dos campañas. La de 2024 es una curva relativa suavizada leída de un gráfico (Boletín #3 de Red DIMA, AAPPCE; incertidumbre de lectura ≈ ±3 pp) y no hay réplicas; la de 2026 es una sola serie sin réplicas. Los umbrales de 28 °C o más mejoran algo más pero equivalen a casi anular la regla y no se adoptan sin más campañas. El ajuste no corrige la emergencia de mayo–junio 2026 (ocurrida con lluvia casi nula), por lo que el modelo no debe considerarse validado para Pergamino. El lag fijo de 15 días no se modificó: mejora 2026 y empeora 2024.
+
+## Alerta de flushes
+
+La página muestra la **alerta de flushes** de *Lolium multiflorum*: la probabilidad de que en los próximos 7 días emerja
+≥ 5 % de la campaña, con dos niveles (*Atención* desde 15 %, *Alerta* desde 25 %), la emergencia acumulada esperada y la
+ventana de control post-emergente (600–800 °Cd). El modelo (`alerta_lolmu.py`, `alerta_lolmu_params.json`,
+`visualizacion_alerta_lolmu.py`) es el calibrado con 17 campañas de Bordenave; combina el calendario medio de LOLMU, la
+respuesta a las lluvias registradas y, opcionalmente, la fecha de las primeras plántulas y conteos.
+
+**Inicio tardío y variable.** En Pergamino la emergencia empezó a fines de febrero en 2024, en abril en 2026 y en mayo en 2023,
+y el primer pico del motor PREDWEEM lo adelanta (05/03/2026, sin emergencia hasta abril). Por eso el reloj térmico y la ventana
+de control **no** se anclan al primer pico del motor: se calculan desde la fecha de primeras plántulas que informa el usuario (o
+el primer conteo con plántulas). Sin esa fecha, la app muestra la probabilidad de flush pero no la ventana de control.
+
+**Validación** (2024 y 2026 con clima SIGA de INTA Pergamino; 22 intervalos, 11 con flush; `data/campanias/`):
+
+| Información disponible | AUC | Flushes en *Alerta* | Falsas alarmas |
+|---|---|---|---|
+| Solo clima | 0,93 | 6/11 (2026: 2/6) | 0/11 |
+| + primeras plántulas | 0,96 | 9/11 | 2/11 |
+| + conteos | 0,98 | 11/11 | 3/11 |
+
+Un calendario propio armado con las otras campañas de Pergamino empeoró la alerta (AUC 0,85 con primeras plántulas), porque los
+años difieren mucho (2024 temprano; 2023 y 2026 tardíos): la alerta y la curva acumulada usan el calendario de Bordenave (error de
+la curva: 8 puntos en 2024, 27 en 2026). Límites: dos campañas evaluables; 2023 y 2024 son curvas relativas quincenales
+digitalizadas de la Red DIMA; 2023 no tiene clima.
+
+La barra lateral conserva solo los parámetros que usa la alerta (temperaturas base, óptima y crítica, y objetivos 600 y
+800 °Cd); los del motor quedan en sus valores por defecto (cobertura 80 %, termoinhibición 26 °C).
 
 ## Condiciones de uso
 

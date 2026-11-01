@@ -21,7 +21,6 @@ REQUIRED_PRIVATE_ASSETS = (
     "bias_out.npy",
     "modelo_clusters_k3.pkl",
     "meteo_daily.csv",
-    "fondo_predweem_v3.png",
     "logo_predweem.svg",
 )
 
@@ -77,7 +76,6 @@ def build_private_core_source(core_path: Path) -> str:
         "bias_out.npy",
         "modelo_clusters_k3.pkl",
         "meteo_daily.csv",
-        "fondo_predweem_v3.png",
         "logo_predweem.svg",
     )
     missing_assets = [
