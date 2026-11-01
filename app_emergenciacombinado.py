@@ -17,7 +17,8 @@ La alerta (``alerta_lolmu.py``) es la calibrada con 17 campañas de Bordenave, v
 En Pergamino el inicio de la emergencia es tardío y variable (fines de febrero en 2024; abril en 2026; mayo en 2023)
 y el primer pico del motor lo adelanta (05/03/2026, cuando no hubo emergencia hasta abril). Por eso, a diferencia de
 las otras localidades, el reloj térmico y la ventana de control **no** se anclan al primer pico del motor: se
-calculan desde la fecha de las primeras plántulas que informa el usuario (o desde el primer conteo con plántulas).
+calculan desde la fecha de las primeras plántulas que informa el usuario (o desde el primer conteo con plántulas), y,
+mientras no se informen plántulas, la alerta llega como máximo a *Atención*.
 """
 from pathlib import Path
 
@@ -123,21 +124,23 @@ if "df" in globals() and isinstance(df, pd.DataFrame) and not df.empty:
 
 NOTA_PERGAMINO = (
     "**Inicio tardío y variable.** En Pergamino la emergencia empezó a fines de febrero en 2024, a principios de abril en "
-    "2026 y a principios de mayo en 2023 (curvas del gemelo digital). El primer pico del motor PREDWEEM adelanta el inicio "
-    "(05/03/2026, cuando no hubo emergencia hasta abril), por eso aquí el reloj térmico y la ventana de control se calculan "
-    "solo desde la fecha de las primeras plántulas informada (o el primer conteo con plántulas). **Informar esa fecha es "
-    "lo que más mejora la alerta en Pergamino.**\\n\\n"
-    "**Validación en Pergamino** (2024 y 2026, cada una con su clima SIGA de INTA Pergamino; 22 intervalos de 7 a 16 días, "
-    "11 con emergencia ≥ 5 % de la campaña por semana). Solo con clima: AUC 0,93; 6 de 11 flushes en *Alerta* (en 2026, "
-    "con inicio en abril, solo 2 de 6). Con la fecha de primeras plántulas: AUC 0,96; 9 de 11 flushes en *Alerta* y 2 "
-    "falsas alarmas sobre 11 intervalos sin flush. Con conteos: 11 de 11 y 3 falsas alarmas.\\n\\n"
-    "**Por qué no un calendario propio.** Con un calendario armado con las otras campañas de Pergamino la alerta empeora "
-    "(AUC 0,85 con primeras plántulas) porque los años difieren mucho entre sí (2024 temprano; 2023 y 2026 tardíos). Por la "
-    "misma razón la curva acumulada sigue siendo la de Bordenave: su error en las fechas de conteo es bajo en 2024 (8 puntos) "
-    "y alto en 2026 (27 puntos, por el inicio tardío), y el calendario local no lo mejora en promedio. Tómela como "
-    "referencia regional.\\n\\n"
+    "2026 y a mediados de abril en 2023 (curvas del gemelo digital). Las lluvias de febrero y marzo no distinguen esos años "
+    "(2024 y 2026 fueron lluviosos; 2023, muy seco), y el primer pico del motor PREDWEEM adelanta el inicio (05/03/2026). "
+    "Por eso en Pergamino: (1) el reloj térmico y la ventana de control se calculan solo desde la fecha de primeras "
+    "plántulas informada (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como "
+    "máximo a *Atención* («recorrer el lote para detectar el inicio»). **Informar la fecha de las primeras plántulas es lo "
+    "que más mejora la alerta en Pergamino.**\n\n"
+    "**Validación en Pergamino** (2024 y 2026, con clima SIGA de INTA Pergamino; 30 intervalos —incluidas las semanas de "
+    "febrero y marzo de 2026, sin emergencia según el responsable del ensayo—, 11 con emergencia ≥ 5 % de la campaña por "
+    "semana). AUC 0,67 solo con clima, 0,74 con la fecha de primeras plántulas y 0,81 con conteos: la alerta acierta una vez "
+    "iniciada la emergencia, pero antes del inicio responde a las lluvias. Sin el tope daba *Alerta* en 9 de 19 intervalos "
+    "sin flush (7 de ellos en febrero–marzo de 2026); con el tope, 2 de 19, y los 11 flushes quedan en *Atención* o "
+    "*Alerta* (7 en *Alerta*: los primeros de cada año quedan en *Atención* porque todavía no había plántulas informadas). "
+    "Con las mismas semanas, la red neuronal del gemelo dio AUC 0,66.\n\n"
+    "**Curva acumulada.** Es la de Bordenave, como referencia regional (error de 8 puntos en 2024 y 27 en 2026). Un "
+    "calendario propio armado con las otras campañas de Pergamino empeoró la alerta, porque los años difieren mucho.\n\n"
     "**Límites.** Dos campañas evaluables; 2023 y 2024 son curvas relativas digitalizadas de boletines de la Red DIMA "
-    "(quincenales); 2023 no tiene clima."
+    "(quincenales); el clima SIGA de 2023 tiene huecos en abril–agosto y no permite evaluarla."
 )
 
 # Alerta de flushes (independiente del motor científico; no modifica sus resultados)
@@ -156,6 +159,7 @@ if "df_meteo_raw" in globals() and isinstance(df_meteo_raw, pd.DataFrame) and no
             tt_limite=float(globals().get("dga_critico", 800.0)),
             localidad="Pergamino",
             nota_sitio=NOTA_PERGAMINO,
+            tope_sin_inicio=True,  # sin plántulas informadas, como máximo Atención (inicio tardío y variable)
         )
     except Exception as _error_alerta:  # noqa: BLE001
         st.warning(f"No se pudo calcular la alerta: {_error_alerta}")
