@@ -96,10 +96,12 @@ respuesta a las lluvias registradas y, opcionalmente, la fecha de las primeras p
 de abril en 2023. Las lluvias de febrero–marzo no distinguen esos años y el primer pico del motor PREDWEEM adelanta el inicio
 (05/03/2026). Por eso: (1) el reloj térmico y la ventana de control se calculan solo desde la fecha de primeras plántulas que
 informa el usuario (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como máximo a
-*Atención* (`tope_sin_inicio`; la probabilidad no cambia). (3) Hasta la fecha del último conteo en cero sin plántulas previas, la
-probabilidad queda por debajo de *Atención* (14 %; `tope_hasta_ultimo_cero`, la probabilidad por clima queda en el Excel) y la
-curva acumulada arranca después de ese conteo (`curva_desde_ultimo_cero`); desde el día siguiente la alerta vuelve a funcionar,
-porque el primer flush suele venir justo después de un conteo en cero (Pergamino 2026: cero el 01/04, flush al 13/04).
+*Atención* (`tope_sin_inicio`; la probabilidad no cambia). (3) Las semanas que terminaron antes del último conteo en cero sin
+plántulas previas (el conteo confirma que no hubo emergencia) quedan por debajo de *Atención* (14 %; `tope_hasta_ultimo_cero`,
+la probabilidad por clima queda en el Excel) y la curva acumulada arranca después de ese conteo (`curva_desde_ultimo_cero`).
+La semana que sigue al último conteo en cero se evalúa normalmente, porque el primer flush suele venir justo después
+(Pergamino 2026: cero el 01/04, flush al 13/04; en las 7 localidades, 37 % de las semanas siguientes a un conteo en cero
+tuvieron flush).
 
 **Validación** (2024 y 2026 con clima SIGA de INTA Pergamino; 30 intervalos, incluidas las semanas de febrero–marzo de 2026 sin
 emergencia; 11 con flush; `data/campanias/`):
