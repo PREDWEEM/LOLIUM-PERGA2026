@@ -15,6 +15,8 @@ NOMBRE = {"alerta": "Alerta", "atencion": "Atención", "baja": "Sin alerta"}
 TEXTO = {"alerta": "Flush probable en los próximos 7 días: recorrer el lote y preparar el control.",
          "atencion": "Probabilidad de flush por encima de lo habitual: conviene mirar el lote esta semana.",
          "baja": "Flush poco probable en los próximos 7 días."}
+TEXTO_TOPE = ("Lluvias y calendario favorables a un flush, pero todavía no se informaron plántulas: recorrer el lote para "
+              "detectar el inicio (sin plántulas, la alerta llega como máximo a Atención).")
 INFO = {1: "solo clima (sin datos del lote)", 2: "clima + fecha de primeras plántulas", 3: "clima + primeras plántulas + conteos"}
 
 
@@ -88,7 +90,8 @@ def mostrar_alerta_lolmu(meteo_raw: pd.DataFrame, campo: pd.DataFrame | None = N
                          t_base: float = 2.0, t_opt: float = 20.0, t_crit: float = 30.0,
                          tt_control: float = 600.0, tt_limite: float = 800.0, localidad: str = "Bordenave",
                          nota_sitio: str | None = None, calendario_local: dict | None = None,
-                         calendario_en_alerta: bool = False, agotamiento: dict | None = None) -> dict | None:
+                         calendario_en_alerta: bool = False, agotamiento: dict | None = None,
+                         tope_sin_inicio: bool = False) -> dict | None:
     """``calendario_local`` (opcional): curva acumulada propia del sitio para el panel de emergencia acumulada, con claves
     ``dia`` (día del año), ``media``, ``bajo``, ``alto`` (fracciones 0–1), ``campanias`` (lista de años) y ``rango``
     (texto del rango, p. ej. "mínimo–máximo"). La probabilidad de flush sigue usando el calendario de Bordenave."""
@@ -202,12 +205,14 @@ def mostrar_alerta_lolmu(meteo_raw: pd.DataFrame, campo: pd.DataFrame | None = N
         opc["calendario"] = {"dia": calendario_local["dia"], "media": calendario_local["media"]}
     if agotamiento:
         opc["agotamiento"] = agotamiento
+    if tope_sin_inicio:
+        opc["tope_sin_inicio"] = True
     r = al.evaluar(meteo, emision, primeras, conteos, modelo, **tt, **opc)
     p, nivel = r["probabilidad"], r["nivel"]
     st.markdown(
         f"<div style='background:{COLOR[nivel]};color:white;padding:0.9rem 1.1rem;border-radius:0.6rem;margin:0.4rem 0 0.8rem 0;"
         f"font-size:1.05rem'><b>{emision:%d/%m/%Y}</b> · <b>{NOMBRE[nivel]}</b> · probabilidad de flush en los próximos 7 días: "
-        f"<b>{p:.0%}</b>. {TEXTO[nivel]}<br><span style='font-size:0.9rem;opacity:0.9'>Información usada: {INFO[r['nivel_info']]}.</span></div>",
+        f"<b>{p:.0%}</b>. {TEXTO_TOPE if r.get('tope_aplicado') else TEXTO[nivel]}<br><span style='font-size:0.9rem;opacity:0.9'>Información usada: {INFO[r['nivel_info']]}.</span></div>",
         unsafe_allow_html=True)
 
     clima = al.limpiar_clima(meteo)
@@ -267,8 +272,8 @@ def mostrar_alerta_lolmu(meteo_raw: pd.DataFrame, campo: pd.DataFrame | None = N
                        text=f" emisión {emision:%d/%m}")
     fig.add_trace(go.Scatter(x=s["Fecha"], y=100 * s["probabilidad"], mode="lines+markers", name="Probabilidad de flush (7 días)",
                              line=dict(color="#2a78d6", width=2),
-                             marker=dict(size=9, color=[COLOR[al.nivel_de(v)] for v in s["probabilidad"]], line=dict(color="white", width=1)),
-                             customdata=np.c_[[INFO[v] for v in s["nivel_info"]], [NOMBRE[al.nivel_de(v)] for v in s["probabilidad"]]],
+                             marker=dict(size=9, color=[COLOR[v] for v in s["nivel"]], line=dict(color="white", width=1)),
+                             customdata=np.c_[[INFO[v] for v in s["nivel_info"]], [NOMBRE[v] for v in s["nivel"]]],
                              hovertemplate="%{x|%d/%m}: %{y:.0f} % · %{customdata[1]}<br>%{customdata[0]}<extra></extra>"), row=1, col=1)
     if conteos is not None and not conteos.empty:
         cc = conteos[conteos["Fecha"] <= emision]
@@ -352,7 +357,7 @@ def mostrar_alerta_lolmu(meteo_raw: pd.DataFrame, campo: pd.DataFrame | None = N
                                                     "Valor": [round(_ag, 3) if _ag is not None else "sin primeras plántulas: no se aplica"]})],
                             ignore_index=True)
     serie_out = s.assign(**{"Probabilidad de flush (%)": (100 * s["probabilidad"]).round(1),
-                            "Nivel": [NOMBRE[al.nivel_de(v)] for v in s["probabilidad"]],
+                            "Nivel": [NOMBRE[v] for v in s["nivel"]],
                             "Información usada": [INFO[v] for v in s["nivel_info"]]})[["Fecha", "Probabilidad de flush (%)", "Nivel", "Información usada"]]
     _lo, _hi = ("P10 (%)", "P90 (%)") if not calendario_local else ("Mínimo (%)", "Máximo (%)")
     curva_out = cv.assign(**{"Emergencia acumulada media (%)": (100 * cv["media"]).round(2), _lo: (100 * cv["p10"]).round(2),

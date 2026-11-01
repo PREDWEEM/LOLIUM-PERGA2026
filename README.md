@@ -92,23 +92,26 @@ ventana de control post-emergente (600–800 °Cd). El modelo (`alerta_lolmu.py`
 `visualizacion_alerta_lolmu.py`) es el calibrado con 17 campañas de Bordenave; combina el calendario medio de LOLMU, la
 respuesta a las lluvias registradas y, opcionalmente, la fecha de las primeras plántulas y conteos.
 
-**Inicio tardío y variable.** En Pergamino la emergencia empezó a fines de febrero en 2024, en abril en 2026 y en mayo en 2023,
-y el primer pico del motor PREDWEEM lo adelanta (05/03/2026, sin emergencia hasta abril). Por eso el reloj térmico y la ventana
-de control **no** se anclan al primer pico del motor: se calculan desde la fecha de primeras plántulas que informa el usuario (o
-el primer conteo con plántulas). Sin esa fecha, la app muestra la probabilidad de flush pero no la ventana de control.
+**Inicio tardío y variable.** En Pergamino la emergencia empezó a fines de febrero en 2024, en abril en 2026 y a mediados
+de abril en 2023. Las lluvias de febrero–marzo no distinguen esos años y el primer pico del motor PREDWEEM adelanta el inicio
+(05/03/2026). Por eso: (1) el reloj térmico y la ventana de control se calculan solo desde la fecha de primeras plántulas que
+informa el usuario (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como máximo a
+*Atención* (`tope_sin_inicio`; la probabilidad no cambia).
 
-**Validación** (2024 y 2026 con clima SIGA de INTA Pergamino; 22 intervalos, 11 con flush; `data/campanias/`):
+**Validación** (2024 y 2026 con clima SIGA de INTA Pergamino; 30 intervalos, incluidas las semanas de febrero–marzo de 2026 sin
+emergencia; 11 con flush; `data/campanias/`):
 
-| Información disponible | AUC | Flushes en *Alerta* | Falsas alarmas |
+| Información disponible | AUC | Flushes en *Alerta* (con tope) | Falsas *Alerta* con tope / sin tope |
 |---|---|---|---|
-| Solo clima | 0,93 | 6/11 (2026: 2/6) | 0/11 |
-| + primeras plántulas | 0,96 | 9/11 | 2/11 |
-| + conteos | 0,98 | 11/11 | 3/11 |
+| Solo clima | 0,67 | 0 (9/11 en *Atención*) | 0/19 / 7/19 |
+| + primeras plántulas | 0,74 | 7/11 (11/11 en *Atención* o *Alerta*) | 2/19 / 9/19 |
+| + conteos | 0,81 | — | — |
 
-Un calendario propio armado con las otras campañas de Pergamino empeoró la alerta (AUC 0,85 con primeras plántulas), porque los
-años difieren mucho (2024 temprano; 2023 y 2026 tardíos): la alerta y la curva acumulada usan el calendario de Bordenave (error de
-la curva: 8 puntos en 2024, 27 en 2026). Límites: dos campañas evaluables; 2023 y 2024 son curvas relativas quincenales
-digitalizadas de la Red DIMA; 2023 no tiene clima.
+Antes del inicio la alerta responde a las lluvias y no puede saber si la emergencia ya empezó: en febrero–marzo de 2026 daba
+*Alerta* casi todas las semanas. Con las mismas semanas, la red neuronal del gemelo dio AUC 0,66. Un calendario propio armado con
+las otras campañas de Pergamino empeoró la alerta (los años difieren mucho): la alerta y la curva acumulada usan el calendario de
+Bordenave (error de la curva: 8 puntos en 2024, 27 en 2026). Límites: dos campañas evaluables; 2023 y 2024 son curvas relativas
+quincenales digitalizadas de la Red DIMA; el clima SIGA de 2023 tiene huecos en abril–agosto.
 
 La barra lateral conserva solo los parámetros que usa la alerta (temperaturas base, óptima y crítica, y objetivos 600 y
 800 °Cd); los del motor quedan en sus valores por defecto (cobertura 80 %, termoinhibición 26 °C).
