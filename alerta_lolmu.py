@@ -166,7 +166,7 @@ def nivel_de(p: float) -> str:
 def evaluar(clima_raw: pd.DataFrame, fecha: pd.Timestamp, primeras_plantulas: pd.Timestamp | None = None,
             conteos: pd.DataFrame | None = None, modelo: AlertaLolmu | None = None,
             t_base=2.0, t_opt=20.0, t_crit=30.0, calendario: dict | None = None, agotamiento: dict | None = None,
-            tope_sin_inicio: bool = False) -> dict:
+            tope_sin_inicio: bool = False, cero_reciente_dias: int | None = None) -> dict:
     """Probabilidad de flush para los 7 días posteriores a ``fecha`` con la información disponible.
 
     Opciones por sitio (ambas desactivadas por defecto):
@@ -175,7 +175,10 @@ def evaluar(clima_raw: pd.DataFrame, fecha: pd.Timestamp, primeras_plantulas: pd
       * ``agotamiento``: ``tau``, ``beta``, ``intensidad`` del agotamiento Weibull de la cohorte; multiplica la
         probabilidad según los días transcurridos desde las primeras plántulas (solo si se conocen);
       * ``tope_sin_inicio``: mientras no se vieron plántulas, el nivel llega como máximo a *Atención* (la probabilidad
-        no cambia); para sitios donde el inicio es tardío y variable.
+        no cambia); para sitios donde el inicio es tardío y variable;
+      * ``cero_reciente_dias``: si todavía no se vieron plántulas y el último conteo (hasta ``fecha``) fue en cero hace
+        como mucho esos días, el nivel es *Sin alerta* (el lote no inició la emergencia; la probabilidad por clima se
+        informa igual en ``probabilidad``).
     """
     modelo = modelo or AlertaLolmu()
     clima = limpiar_clima(clima_raw)
@@ -206,7 +209,15 @@ def evaluar(clima_raw: pd.DataFrame, fecha: pd.Timestamp, primeras_plantulas: pd
     tope = bool(tope_sin_inicio and not iniciada and nivel_alerta == "alerta")
     if tope:
         nivel_alerta = "atencion"
-    return {"fecha": fecha, "nivel_info": nivel, "probabilidad": p, "nivel": nivel_alerta, "tope_aplicado": tope, "senales": senales,
+    cero_reciente = None
+    if cero_reciente_dias is not None and not iniciada and conteos is not None and not conteos.empty:
+        previos = conteos[conteos["Fecha"] <= fecha].sort_values("Fecha")
+        if not previos.empty and float(previos["PLM2"].iloc[-1]) == 0.0 \
+                and (fecha - pd.Timestamp(previos["Fecha"].iloc[-1])).days <= cero_reciente_dias:
+            cero_reciente = pd.Timestamp(previos["Fecha"].iloc[-1])
+            nivel_alerta, tope = "baja", False
+    return {"fecha": fecha, "nivel_info": nivel, "probabilidad": p, "nivel": nivel_alerta, "tope_aplicado": tope,
+            "cero_reciente": cero_reciente, "senales": senales,
             "primeras_plantulas": pd.Timestamp(primeras_plantulas) if iniciada else None}
 
 
@@ -218,5 +229,6 @@ def serie(clima_raw: pd.DataFrame, desde: pd.Timestamp, hasta: pd.Timestamp, pri
     for f in pd.date_range(desde, hasta, freq=f"{paso}D"):
         r = evaluar(clima_raw, f, primeras_plantulas if (primeras_plantulas is not None and pd.Timestamp(primeras_plantulas) <= f) else None,
                     conteos, modelo, **tt)
-        filas.append({"Fecha": f, "probabilidad": r["probabilidad"], "nivel_info": r["nivel_info"], "nivel": r["nivel"]})
+        filas.append({"Fecha": f, "probabilidad": r["probabilidad"], "nivel_info": r["nivel_info"], "nivel": r["nivel"],
+                      "cero_reciente": r["cero_reciente"] is not None})
     return pd.DataFrame(filas)
