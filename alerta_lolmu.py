@@ -177,8 +177,8 @@ def evaluar(clima_raw: pd.DataFrame, fecha: pd.Timestamp, primeras_plantulas: pd
       * ``tope_sin_inicio``: mientras no se vieron plántulas, el nivel llega como máximo a *Atención* (la probabilidad
         no cambia); para sitios donde el inicio es tardío y variable;
       * ``cero_reciente_dias``: si todavía no se vieron plántulas y el último conteo (hasta ``fecha``) fue en cero hace
-        como mucho esos días, el nivel es *Sin alerta* (el lote no inició la emergencia; la probabilidad por clima se
-        informa igual en ``probabilidad``).
+        como mucho esos días, el nivel llega como máximo a *Atención* (recorrer el lote: el primer flush suele venir
+        justo después de un conteo en cero, por eso no se silencia); la probabilidad no cambia.
     """
     modelo = modelo or AlertaLolmu()
     clima = limpiar_clima(clima_raw)
@@ -215,7 +215,8 @@ def evaluar(clima_raw: pd.DataFrame, fecha: pd.Timestamp, primeras_plantulas: pd
         if not previos.empty and float(previos["PLM2"].iloc[-1]) == 0.0 \
                 and (fecha - pd.Timestamp(previos["Fecha"].iloc[-1])).days <= cero_reciente_dias:
             cero_reciente = pd.Timestamp(previos["Fecha"].iloc[-1])
-            nivel_alerta, tope = "baja", False
+            if nivel_alerta == "alerta":
+                nivel_alerta = "atencion"
     return {"fecha": fecha, "nivel_info": nivel, "probabilidad": p, "nivel": nivel_alerta, "tope_aplicado": tope,
             "cero_reciente": cero_reciente, "senales": senales,
             "primeras_plantulas": pd.Timestamp(primeras_plantulas) if iniciada else None}

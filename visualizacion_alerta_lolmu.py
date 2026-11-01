@@ -215,8 +215,9 @@ def mostrar_alerta_lolmu(meteo_raw: pd.DataFrame, campo: pd.DataFrame | None = N
     st.markdown(
         f"<div style='background:{COLOR[nivel]};color:white;padding:0.9rem 1.1rem;border-radius:0.6rem;margin:0.4rem 0 0.8rem 0;"
         f"font-size:1.05rem'><b>{emision:%d/%m/%Y}</b> · <b>{NOMBRE[nivel]}</b> · probabilidad de flush en los próximos 7 días: "
-        + (f"sin inicio en el lote. Último conteo en cero el {r['cero_reciente']:%d/%m}: seguir contando; la alerta se activa al registrar "
-           f"las primeras plántulas (probabilidad por clima: {p:.0%}).<br>" if r.get("cero_reciente") is not None else
+        + (f"<b>{p:.0%}</b>. Último conteo en cero el {r['cero_reciente']:%d/%m}: todavía sin plántulas en el lote. "
+           + ("Recorrer el lote para detectar el inicio (con un conteo en cero reciente, la alerta llega como máximo a Atención)."
+              if nivel == "atencion" else TEXTO[nivel]) + "<br>" if r.get("cero_reciente") is not None else
            f"<b>{p:.0%}</b>. {TEXTO_TOPE if r.get('tope_aplicado') else TEXTO[nivel]}<br>")
         + f"<span style='font-size:0.9rem;opacity:0.9'>Información usada: {'clima + conteos en cero (todavía sin plántulas)' if r.get('cero_reciente') is not None else INFO[r['nivel_info']]}.</span></div>",
         unsafe_allow_html=True)
@@ -227,11 +228,8 @@ def mostrar_alerta_lolmu(meteo_raw: pd.DataFrame, campo: pd.DataFrame | None = N
         (pd.Timestamp(inicio_predicho).normalize(), "inicio estimado por PREDWEEM") if inicio_predicho is not None and pd.Timestamp(inicio_predicho) <= emision
         else (None, None))
     m1, m2, m3, m4 = st.columns(4)
-    if r.get("cero_reciente") is not None:
-        m1.metric("Probabilidad de flush (7 días)", "Sin inicio", help=f"Último conteo en cero el {r['cero_reciente']:%d/%m}. "
-                  f"La probabilidad por clima sería {p:.0%}, pero el lote todavía no inició la emergencia.")
-    else:
-        m1.metric("Probabilidad de flush (7 días)", f"{p:.0%}", help="Tasa histórica: ~25 % de las semanas de campaña.")
+    m1.metric("Probabilidad de flush (7 días)", f"{p:.0%}", help="Tasa histórica: ~25 % de las semanas de campaña."
+              + (f" Último conteo en cero el {r['cero_reciente']:%d/%m}: como máximo Atención." if r.get("cero_reciente") is not None else ""))
     m2.metric("Emergencia esperada por lluvias", f"{100 * r['senales']['lluvia']:.1f} %",
               help="Respuesta relativa a las lluvias registradas hasta la fecha (señal, no % de la campaña).")
     if ancla is not None:
@@ -280,11 +278,11 @@ def mostrar_alerta_lolmu(meteo_raw: pd.DataFrame, campo: pd.DataFrame | None = N
         fig.add_vline(x=emision, line_dash="dash", line_color="#9ca3af", exclude_empty_subplots=False, row=fila, col=1)
     fig.add_annotation(x=emision, y=4, xref="x", yref="y", showarrow=False, xanchor="left", font=dict(size=11, color="#6b7280"),
                        text=f" emisión {emision:%d/%m}")
-    # semanas con un conteo reciente en cero y sin plántulas: el lote no inició la emergencia (se grafican en 0 %)
+    # semanas con un conteo reciente en cero y sin plántulas: como máximo Atención (el color del punto lo indica)
     sin_inicio = s["cero_reciente"].astype(bool) if "cero_reciente" in s else pd.Series(False, index=s.index)
-    y_plot = np.where(sin_inicio, 0.0, 100 * s["probabilidad"])
-    etiqueta = [f"sin inicio: conteo en cero (por clima {100 * v:.0f} %)" if z else INFO[n]
-                for z, v, n in zip(sin_inicio, s["probabilidad"], s["nivel_info"])]
+    y_plot = 100 * s["probabilidad"]
+    etiqueta = ["conteo reciente en cero, todavía sin plántulas (máx. Atención)" if z else INFO[n]
+                for z, n in zip(sin_inicio, s["nivel_info"])]
     fig.add_trace(go.Scatter(x=s["Fecha"], y=y_plot, mode="lines+markers", name="Probabilidad de flush (7 días)",
                              line=dict(color="#2a78d6", width=2),
                              marker=dict(size=9, color=[COLOR[v] for v in s["nivel"]], line=dict(color="white", width=1)),
