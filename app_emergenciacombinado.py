@@ -128,7 +128,9 @@ NOTA_PERGAMINO = (
     "(2024 y 2026 fueron lluviosos; 2023, muy seco), y el primer pico del motor PREDWEEM adelanta el inicio (05/03/2026). "
     "Por eso en Pergamino: (1) el reloj térmico y la ventana de control se calculan solo desde la fecha de primeras "
     "plántulas informada (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como "
-    "máximo a *Atención* («recorrer el lote para detectar el inicio»). **Informar la fecha de las primeras plántulas es lo "
+    "máximo a *Atención* («recorrer el lote para detectar el inicio»); (3) si el último conteo, de los últimos 10 días, fue "
+    "en cero y todavía no hubo plántulas, la alerta queda en *Sin alerta* (el lote no inició la emergencia: seguir contando) y "
+    "la curva acumulada arranca después de ese conteo. **Informar la fecha de las primeras plántulas es lo "
     "que más mejora la alerta en Pergamino.**\n\n"
     "**Validación en Pergamino** (2024 y 2026, con clima SIGA de INTA Pergamino; 30 intervalos —incluidas las semanas de "
     "febrero y marzo de 2026, sin emergencia según el responsable del ensayo—, 11 con emergencia ≥ 5 % de la campaña por "
@@ -169,6 +171,8 @@ if "df_meteo_raw" in globals() and isinstance(df_meteo_raw, pd.DataFrame) and no
             localidad="Pergamino",
             nota_sitio=NOTA_PERGAMINO,
             tope_sin_inicio=True,  # sin plántulas informadas, como máximo Atención (inicio tardío y variable)
+            cero_reciente_dias=10,  # conteo en cero en los últimos 10 días y sin plántulas: Sin alerta (seguir contando)
+            curva_desde_ultimo_cero=True,  # la curva acumulada arranca después del último conteo en cero
         )
     except Exception as _error_alerta:  # noqa: BLE001
         st.warning(f"No se pudo calcular la alerta: {_error_alerta}")
