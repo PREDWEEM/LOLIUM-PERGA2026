@@ -97,8 +97,9 @@ de abril en 2023. Las lluvias de febrero–marzo no distinguen esos años y el p
 (05/03/2026). Por eso: (1) el reloj térmico y la ventana de control se calculan solo desde la fecha de primeras plántulas que
 informa el usuario (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como máximo a
 *Atención* (`tope_sin_inicio`; la probabilidad no cambia). (3) Si el último conteo de los 10 días previos fue en cero y todavía no
-hubo plántulas, la alerta queda en *Sin alerta* («sin inicio en el lote: seguir contando»; `cero_reciente_dias`), el gráfico
-semanal marca esas semanas en 0 % y la curva acumulada arranca después de ese conteo (`curva_desde_ultimo_cero`).
+hubo plántulas, la alerta llega como máximo a *Atención* (`cero_reciente_dias`) y la curva acumulada arranca después de ese
+conteo (`curva_desde_ultimo_cero`). No se silencia del todo porque el primer flush suele venir justo después de un conteo en cero
+(Pergamino 2026: cero el 01/04 y flush al 13/04; lo mismo en Balcarce, Azul y Lartigau).
 
 **Validación** (2024 y 2026 con clima SIGA de INTA Pergamino; 30 intervalos, incluidas las semanas de febrero–marzo de 2026 sin
 emergencia; 11 con flush; `data/campanias/`):
