@@ -98,7 +98,7 @@ de abril en 2023. Las lluvias de febrero–marzo no distinguen esos años y el p
 informa el usuario (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como máximo a
 *Atención* (`tope_sin_inicio`; la probabilidad no cambia). (3) Las semanas que terminaron antes del último conteo en cero sin
 plántulas previas (el conteo confirma que no hubo emergencia) quedan por debajo de *Atención* (14 %; `tope_hasta_ultimo_cero`,
-la probabilidad por clima queda en el Excel) y la curva acumulada arranca después de ese conteo (`curva_desde_ultimo_cero`).
+la probabilidad por clima queda en el Excel) y la curva acumulada arranca a mitad de camino entre ese conteo y el primer conteo con plántulas (`curva_desde_ultimo_cero`).
 La semana que sigue al último conteo en cero se evalúa normalmente, porque el primer flush suele venir justo después
 (Pergamino 2026: cero el 01/04, flush al 13/04; en las 7 localidades, 37 % de las semanas siguientes a un conteo en cero
 tuvieron flush).

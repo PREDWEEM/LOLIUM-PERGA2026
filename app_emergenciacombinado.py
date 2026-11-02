@@ -173,7 +173,7 @@ if "df_meteo_raw" in globals() and isinstance(df_meteo_raw, pd.DataFrame) and no
             nota_sitio=NOTA_PERGAMINO,
             tope_sin_inicio=True,  # sin plántulas informadas, como máximo Atención (inicio tardío y variable)
             tope_hasta_ultimo_cero=True,  # semanas ya cerradas por un conteo posterior en cero: probabilidad por debajo de Atención
-            curva_desde_ultimo_cero=True,  # la curva acumulada arranca después del último conteo en cero
+            curva_desde_ultimo_cero=True,  # la curva acumulada arranca a mitad de camino entre el último cero y el primer conteo con plántulas
         )
     except Exception as _error_alerta:  # noqa: BLE001
         st.warning(f"No se pudo calcular la alerta: {_error_alerta}")
