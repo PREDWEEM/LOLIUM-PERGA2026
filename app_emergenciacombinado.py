@@ -129,7 +129,7 @@ NOTA_PERGAMINO = (
     "Por eso en Pergamino: (1) el reloj térmico y la ventana de control se calculan solo desde la fecha de primeras "
     "plántulas informada (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como "
     "máximo a *Atención* («recorrer el lote para detectar el inicio»); (3) las semanas que un conteo posterior en cero "
-    "(sin plántulas previas) confirma sin emergencia quedan por debajo de *Atención*, y la curva acumulada arranca después "
+    "(sin plántulas previas) confirma sin emergencia quedan en 0 %, y la curva acumulada arranca después "
     "de ese conteo; la semana que sigue al último conteo en cero se evalúa normalmente, porque el primer flush suele venir "
     "justo después (Pergamino 2026: cero el 01/04, flush al 13/04). **Informar la fecha de las primeras plántulas es lo "
     "que más mejora la alerta en Pergamino.**\n\n"
@@ -172,7 +172,7 @@ if "df_meteo_raw" in globals() and isinstance(df_meteo_raw, pd.DataFrame) and no
             localidad="Pergamino",
             nota_sitio=NOTA_PERGAMINO,
             tope_sin_inicio=True,  # sin plántulas informadas, como máximo Atención (inicio tardío y variable)
-            tope_hasta_ultimo_cero=True,  # semanas ya cerradas por un conteo posterior en cero: probabilidad por debajo de Atención
+            tope_hasta_ultimo_cero=True,  # semanas ya cerradas por un conteo posterior en cero: probabilidad 0
             curva_desde_ultimo_cero=True,  # la curva acumulada arranca a mitad de camino entre el último cero y el primer conteo con plántulas
         )
     except Exception as _error_alerta:  # noqa: BLE001
