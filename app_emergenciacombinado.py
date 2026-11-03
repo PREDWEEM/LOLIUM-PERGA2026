@@ -130,14 +130,14 @@ NOTA_PERGAMINO = (
     "plántulas informada (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como "
     "máximo a *Atención* («recorrer el lote para detectar el inicio»); (3) las semanas que un conteo posterior en cero "
     "(sin plántulas previas) confirma sin emergencia quedan en 0 %, y la curva acumulada arranca después "
-    "de ese conteo; la semana que sigue al último conteo en cero se evalúa normalmente, porque el primer flush suele venir "
-    "justo después (Pergamino 2026: cero el 01/04, flush al 13/04). **Informar la fecha de las primeras plántulas es lo "
+    "de ese conteo; la semana que sigue al último conteo en cero se evalúa normalmente, porque el primer gran flujo suele venir "
+    "justo después (Pergamino 2026: cero el 01/04, gran flujo al 13/04). **Informar la fecha de las primeras plántulas es lo "
     "que más mejora la alerta en Pergamino.**\n\n"
     "**Validación en Pergamino** (2024 y 2026, con clima SIGA de INTA Pergamino; 30 intervalos —incluidas las semanas de "
     "febrero y marzo de 2026, sin emergencia según el responsable del ensayo—, 11 con emergencia ≥ 5 % de la campaña por "
     "semana). AUC 0,67 solo con clima, 0,74 con la fecha de primeras plántulas y 0,81 con conteos: la alerta acierta una vez "
     "iniciada la emergencia, pero antes del inicio responde a las lluvias. Sin el tope daba *Alerta* en 9 de 19 intervalos "
-    "sin flush (7 de ellos en febrero–marzo de 2026); con el tope, 2 de 19, y los 11 flushes quedan en *Atención* o "
+    "sin gran flujo (7 de ellos en febrero–marzo de 2026); con el tope, 2 de 19, y los 11 grandes flujos quedan en *Atención* o "
     "*Alerta* (7 en *Alerta*: los primeros de cada año quedan en *Atención* porque todavía no había plántulas informadas). "
     "Con las mismas semanas, la red neuronal del gemelo dio AUC 0,66.\n\n"
     "**Curva acumulada.** Es la de Bordenave, como referencia regional (error de 8 puntos en 2024 y 27 en 2026). Un "
@@ -205,7 +205,7 @@ if isinstance(_resultados_alerta, dict) and _resultados_alerta:
     st.subheader("📥 Descarga de resultados")
     st.caption(
         "Excel con los resultados que muestra la app para la fecha de emisión elegida: resumen (nivel y probabilidad de "
-        "flush, inicio y ventana de control 600–800 °Cd, emergencia acumulada esperada), alerta semanal, emergencia "
+        "gran flujo, inicio y ventana de control 600–800 °Cd, emergencia acumulada esperada), alerta semanal, emergencia "
         "acumulada con su rango, tiempo térmico diario desde el inicio, conteos usados, clima, parámetros y validación."
     )
     st.download_button(
