@@ -174,6 +174,7 @@ if "df_meteo_raw" in globals() and isinstance(df_meteo_raw, pd.DataFrame) and no
             tope_sin_inicio=True,  # sin plántulas informadas, como máximo Atención (inicio tardío y variable)
             tope_hasta_ultimo_cero=True,  # semanas ya cerradas por un conteo posterior en cero: probabilidad 0
             curva_desde_ultimo_cero=True,  # la curva acumulada arranca a mitad de camino entre el último cero y el primer conteo con plántulas
+            curva_tiempo_termico=True,  # con primeras plántulas, curva acumulada en tiempo térmico desde esa fecha
         )
     except Exception as _error_alerta:  # noqa: BLE001
         st.warning(f"No se pudo calcular la alerta: {_error_alerta}")
