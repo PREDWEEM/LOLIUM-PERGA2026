@@ -188,19 +188,19 @@ la emergencia se extiende hasta el invierno, y en sitios donde se corta antes av
 ## Residual a la siembra (guía de riesgo)
 
 Debajo de la alerta, un recuadro siempre visible muestra, para la **fecha de siembra prevista** (1/05–31/07; si no se
-carga, el 1/06 como referencia), el riesgo de nacimientos en la **ventana de acción del residual: de 15 días antes a 45 días
+carga, el 1/06 como referencia), el riesgo de nacimientos en la **ventana de acción del residual: de 10 días antes a 45 días
 después de la siembra**, el período de acción promedio de un herbicida residual. Tiene tres tarjetas: riesgo, nacimientos en
 la ventana (mediana de las campañas, en plantas/m² y en % de la campaña) y recomendación. Se calcula con las 2 campañas de Pergamino (`residual` en `alerta_lolmu_params.json`). Las plantas/m² usan la densidad de cada campaña con conteos; las campañas que solo
 tienen la curva relativa usan la densidad de referencia del sitio (1719 pl/m² por campaña, mediana de las
 campañas con conteos):
 
-| Siembra | Nacimientos de −15 a +45 días (mediana) | Riesgo para el residual | Campañas del sitio |
+| Siembra | Nacimientos de −10 a +45 días (mediana) | Riesgo para el residual | Campañas del sitio |
 |---|---|---|---|
-| 1/05 | 1041 pl/m² (44,3 %) | Muy alto | 2024: 57 pl/m² · 2026: 2026 pl/m² |
-| 15/05 | 880 pl/m² (31,9 %) | Muy alto | 2024: 22 pl/m² · 2026: 1738 pl/m² |
-| 1/06 | 777 pl/m² (24,8 %) | Muy alto | 2024: 3 pl/m² · 2026: 1552 pl/m² |
-| 15/06 | 435 pl/m² (13,6 %) | Muy alto | 2024: 0 pl/m² · 2026: 870 pl/m² |
-| 1/07 | 146 pl/m² (4,6 %) | Muy alto | 2024: 0 pl/m² · 2026: 293 pl/m² |
+| 1/05 | 917 pl/m² (37,8 %) | Muy alto | 2024: 44 pl/m² · 2026: 1790 pl/m² |
+| 15/05 | 864 pl/m² (29,9 %) | Muy alto | 2024: 15 pl/m² · 2026: 1712 pl/m² |
+| 1/06 | 672 pl/m² (21,3 %) | Muy alto | 2024: 2 pl/m² · 2026: 1342 pl/m² |
+| 15/06 | 339 pl/m² (10,5 %) | Muy alto | 2024: 0 pl/m² · 2026: 677 pl/m² |
+| 1/07 | 86 pl/m² (2,7 %) | Muy alto | 2024: 0 pl/m² · 2026: 173 pl/m² |
 
 El nivel de riesgo surge de las plantas/m² que nacieron en la ventana en una campaña típica (mediana). Se usan plantas
 y no el % de la campaña porque en sitios con mucha densidad una fracción chica son muchas plantas (en San Pedro, 0,8 % de
