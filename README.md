@@ -194,30 +194,35 @@ carga, el 1/06 como referencia), el riesgo de nacimientos en dos períodos:
 - **Post-emergente:** más de 45 días después de la siembra, fuera del alcance del residual; lo que nace ahí se controla con
   un graminicida post-emergente.
 
-Cada período tiene tres tarjetas: riesgo, emergencia en el período (mediana de las campañas) y recomendación. Se calcula con las 2 campañas de Pergamino (`residual` en `alerta_lolmu_params.json`):
+Cada período tiene tres tarjetas: riesgo, nacimientos en el período (mediana de las campañas, en plantas/m² y en % de la
+campaña) y recomendación. Se calcula con las 2 campañas de Pergamino (`residual` en `alerta_lolmu_params.json`). Las plantas/m² usan la densidad de cada campaña con conteos; las campañas que solo
+tienen la curva relativa usan la densidad de referencia del sitio (1719 pl/m² por campaña, mediana de las
+campañas con conteos):
 
-| Siembra | Emergencia de −15 a +45 días (mediana) | Riesgo para el residual | Emergencia después de +45 días (mediana) | Riesgo para el post-emergente | Campañas del sitio (residual / post) |
+| Siembra | Nacimientos de −15 a +45 días (mediana) | Riesgo para el residual | Nacimientos después de +45 días (mediana) | Riesgo para el post-emergente | Campañas del sitio (residual / post) |
 |---|---|---|---|---|---|
-| 1/05 | 44,3 % | Muy alto | 5,1 % | Muy alto | 2024: 25,6 % / 0,0 % · 2026: 63,0 % / 10,2 % |
-| 15/05 | 31,9 % | Muy alto | 0,7 % | Medio | 2024: 9,7 % / 0,0 % · 2026: 54,1 % / 1,4 % |
-| 1/06 | 24,8 % | Muy alto | 0,0 % | Bajo | 2024: 1,3 % / 0,0 % · 2026: 48,3 % / 0,0 % |
-| 15/06 | 13,6 % | Muy alto | 0,0 % | Bajo | 2024: 0,1 % / 0,0 % · 2026: 27,0 % / 0,0 % |
-| 1/07 | 4,6 % | Alto | 0,0 % | Bajo | 2024: 0,0 % / 0,0 % · 2026: 9,1 % / 0,0 % |
+| 1/05 | 1041 pl/m² (44,3 %) | Muy alto | 164 pl/m² (5,1 %) | Muy alto | 2024: 57 pl/m² / 0 pl/m² · 2026: 2026 pl/m² / 328 pl/m² |
+| 15/05 | 880 pl/m² (31,9 %) | Muy alto | 22 pl/m² (0,7 %) | Alto | 2024: 22 pl/m² / 0 pl/m² · 2026: 1738 pl/m² / 44 pl/m² |
+| 1/06 | 777 pl/m² (24,8 %) | Muy alto | 0 pl/m² (0,0 %) | Bajo | 2024: 3 pl/m² / 0 pl/m² · 2026: 1552 pl/m² / 0 pl/m² |
+| 15/06 | 435 pl/m² (13,6 %) | Muy alto | 0 pl/m² (0,0 %) | Bajo | 2024: 0 pl/m² / 0 pl/m² · 2026: 870 pl/m² / 0 pl/m² |
+| 1/07 | 146 pl/m² (4,6 %) | Muy alto | 0 pl/m² (0,0 %) | Bajo | 2024: 0 pl/m² / 0 pl/m² · 2026: 293 pl/m² / 0 pl/m² |
 
-El nivel de riesgo surge de la emergencia típica (mediana, % del total de la campaña) en cada período:
+El nivel de riesgo surge de las plantas/m² que nacieron en cada período en una campaña típica (mediana). Se usan plantas
+y no el % de la campaña porque en sitios con mucha densidad una fracción chica son muchas plantas (en San Pedro, 0,8 % de
+la campaña fueron 29–42 pl/m²):
 
-| Riesgo | Emergencia en el período | Residual | Post-emergente |
+| Riesgo | Nacimientos en el período | Residual | Post-emergente |
 |---|---|---|---|
-| 🔴 Muy alto | ≥ 5 % | Usar residual | Prever graminicida |
-| 🟠 Alto | 2–5 % | Residual recomendado | Graminicida probable |
-| 🟡 Medio | 0,5–2 % | Según infestación: residual si el lote tiene alta infestación o antecedentes de raigrás | Recorrer y decidir |
-| 🟢 Bajo | < 0,5 % | Residual solo en lotes muy infestados | Poco probable |
+| 🔴 Muy alto | ≥ 50 pl/m² | Usar residual | Prever graminicida |
+| 🟠 Alto | 20–50 pl/m² | Residual recomendado | Graminicida probable |
+| 🟡 Medio | 5–20 pl/m² | Según infestación: residual si el lote tiene alta infestación o antecedentes de raigrás | Recorrer y decidir |
+| 🟢 Bajo | < 5 pl/m² | Residual solo en lotes muy infestados | Poco probable |
+
+Las densidades son las registradas en los ensayos del sitio: en un lote con menos raigrás el riesgo es menor.
 
 Debajo de las tarjetas se indica el valor de cada campaña del sitio y qué proporción de las campañas cayó en cada nivel. Es
 un **riesgo histórico, no una predicción de la campaña**: ni la fecha de primeras plántulas ni el clima anticiparon cuánta
-emergencia queda después de la siembra. Como la decisión depende de las plantas por m², en lotes con alta infestación aun una
-fracción chica puede ser más de 100 plantas/m². En todos los casos conviene recorrer el cultivo 30–45 días después de la
-siembra.
+emergencia queda después de la siembra. En todos los casos conviene recorrer el cultivo 30–45 días después de la siembra.
 
 ## Condiciones de uso
 
