@@ -185,34 +185,39 @@ según el modelo; en <sitio> la emergencia suele cortarse antes»: la recalibrac
 la emergencia se extiende hasta el invierno, y en sitios donde se corta antes avisa de más (en Balcarce, en mayo de 2014,
 2025 y 2026, avisó 8 semanas y hubo 2 flujos tardíos). La probabilidad se sigue mostrando.
 
-## Residual a la siembra (guía de riesgo)
+## Residual a la siembra y post-emergente (guía de riesgo)
 
-Debajo de la alerta, un recuadro siempre visible muestra el riesgo de nacimientos después de la siembra para la **fecha de
-siembra prevista** (1/05–31/07; si no se carga, el 1/06 como referencia), en tres tarjetas: riesgo, emergencia después de
-sembrar (mediana) y recomendación. Se calcula con las 2 campañas de Pergamino (`residual` en `alerta_lolmu_params.json`):
+Debajo de la alerta, un recuadro siempre visible muestra, para la **fecha de siembra prevista** (1/05–31/07; si no se
+carga, el 1/06 como referencia), el riesgo de nacimientos en dos períodos:
 
-| Siembra | Emergencia después de sembrar (mediana) | Riesgo | Campañas por nivel: muy alto / alto / medio / bajo | Campañas del sitio |
-|---|---|---|---|---|
-| 1/05 | 31,9 % | Muy alto | 100 % / 0 % / 0 % / 0 % | 2024: 8,5 % · 2026: 55,3 % |
-| 15/05 | 26,3 % | Muy alto | 50 % / 0 % / 50 % / 0 % | 2024: 1,8 % · 2026: 50,7 % |
-| 1/06 | 12,7 % | Muy alto | 50 % / 0 % / 0 % / 50 % | 2024: 0,0 % · 2026: 25,4 % |
-| 15/06 | 5,1 % | Muy alto | 50 % / 0 % / 0 % / 50 % | 2024: 0,0 % · 2026: 10,2 % |
-| 1/07 | 0,3 % | Bajo | 0 % / 0 % / 50 % / 50 % | 2024: 0,0 % · 2026: 0,7 % |
+- **Residual:** de 15 días antes a 45 días después de la siembra, el período de acción promedio de un herbicida residual.
+- **Post-emergente:** más de 45 días después de la siembra, fuera del alcance del residual; lo que nace ahí se controla con
+  un graminicida post-emergente.
 
-El nivel de riesgo surge de la emergencia típica (mediana) de la campaña ocurrida después de la fecha de siembra:
+Cada período tiene tres tarjetas: riesgo, emergencia en el período (mediana de las campañas) y recomendación. Se calcula con las 2 campañas de Pergamino (`residual` en `alerta_lolmu_params.json`):
 
-| Riesgo | Emergencia después de sembrar | Recomendación |
-|---|---|---|
-| 🔴 Muy alto | ≥ 5 % | Usar residual |
-| 🟠 Alto | 2–5 % | Residual recomendado |
-| 🟡 Medio | 0,5–2 % | Según infestación: residual si el lote tiene alta infestación o antecedentes de raigrás |
-| 🟢 Bajo | < 0,5 % | Residual solo en lotes muy infestados |
+| Siembra | Emergencia de −15 a +45 días (mediana) | Riesgo para el residual | Emergencia después de +45 días (mediana) | Riesgo para el post-emergente | Campañas del sitio (residual / post) |
+|---|---|---|---|---|---|
+| 1/05 | 44,3 % | Muy alto | 5,1 % | Muy alto | 2024: 25,6 % / 0,0 % · 2026: 63,0 % / 10,2 % |
+| 15/05 | 31,9 % | Muy alto | 0,7 % | Medio | 2024: 9,7 % / 0,0 % · 2026: 54,1 % / 1,4 % |
+| 1/06 | 24,8 % | Muy alto | 0,0 % | Bajo | 2024: 1,3 % / 0,0 % · 2026: 48,3 % / 0,0 % |
+| 15/06 | 13,6 % | Muy alto | 0,0 % | Bajo | 2024: 0,1 % / 0,0 % · 2026: 27,0 % / 0,0 % |
+| 1/07 | 4,6 % | Alto | 0,0 % | Bajo | 2024: 0,0 % / 0,0 % · 2026: 9,1 % / 0,0 % |
 
-Debajo de las tarjetas se indica qué proporción de las campañas cayó en cada nivel. Es un **riesgo histórico, no una
-predicción de la campaña**: ni la fecha de primeras plántulas ni el clima anticiparon cuánta emergencia queda después de
-la siembra. Como la decisión depende de las plantas por m², en lotes con alta infestación aun una fracción chica puede ser
-más de 100 plantas/m². La necesidad de un graminicida post-emergente no se puede anticipar: se recomienda recorrer el
-cultivo 30–45 días después de la siembra.
+El nivel de riesgo surge de la emergencia típica (mediana, % del total de la campaña) en cada período:
+
+| Riesgo | Emergencia en el período | Residual | Post-emergente |
+|---|---|---|---|
+| 🔴 Muy alto | ≥ 5 % | Usar residual | Prever graminicida |
+| 🟠 Alto | 2–5 % | Residual recomendado | Graminicida probable |
+| 🟡 Medio | 0,5–2 % | Según infestación: residual si el lote tiene alta infestación o antecedentes de raigrás | Recorrer y decidir |
+| 🟢 Bajo | < 0,5 % | Residual solo en lotes muy infestados | Poco probable |
+
+Debajo de las tarjetas se indica el valor de cada campaña del sitio y qué proporción de las campañas cayó en cada nivel. Es
+un **riesgo histórico, no una predicción de la campaña**: ni la fecha de primeras plántulas ni el clima anticiparon cuánta
+emergencia queda después de la siembra. Como la decisión depende de las plantas por m², en lotes con alta infestación aun una
+fracción chica puede ser más de 100 plantas/m². En todos los casos conviene recorrer el cultivo 30–45 días después de la
+siembra.
 
 ## Condiciones de uso
 
