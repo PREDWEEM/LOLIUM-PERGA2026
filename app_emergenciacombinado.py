@@ -87,15 +87,15 @@ _core_source = _cortar(
     _core_source,
     'st.sidebar.markdown("## ⚙️ 2. Fisiología y Logística")',
     "# ---------------------------------------------------------\n# 6. MOTOR DE CÁLCULO",
-    '''st.sidebar.markdown("## ⚙️ Ventana de control")
-st.sidebar.caption("Tiempo térmico sobre la temperatura media del aire desde las primeras plántulas y objetivos de la ventana post-emergente.")
+    '''st.sidebar.markdown("## ⚙️ Graminicida de barbecho")
+st.sidebar.caption("Tiempo térmico sobre la temperatura media del aire desde las primeras plántulas y ventana del graminicida de barbecho (600–800 °Cd: raigrás de 4 a 6 macollos).")
 col_t1, col_t2 = st.sidebar.columns(2)
 with col_t1: t_base_val = st.number_input("T Base", value=2.0, step=0.5)
 with col_t2: t_opt_max = st.number_input("T Óptima Max", value=20.0, step=1.0)
 t_critica = st.sidebar.slider("T Crítica (Stop)", 26.0, 42.0, 30.0)
 st.sidebar.markdown("**Objetivos (°Cd)**")
-dga_optimo = st.sidebar.number_input("TT Control Post-emergente (°Cd)", value=600, step=10)
-dga_critico = st.sidebar.number_input("Límite Ventana (°Cd)", value=800, step=10)
+dga_optimo = st.sidebar.number_input("TT inicio de la ventana (4 macollos, °Cd)", value=600, step=10)
+dga_critico = st.sidebar.number_input("TT fin de la ventana (6 macollos, °Cd)", value=800, step=10)
 
 # parámetros del motor PREDWEEM en sus valores por defecto (controles retirados de la página)
 umbral_er = 0.0001
@@ -132,7 +132,7 @@ NOTA_PERGAMINO = (
     "**Inicio tardío y variable.** En Pergamino la emergencia empezó a fines de febrero en 2024, a principios de abril en "
     "2026 y a mediados de abril en 2023 (curvas del gemelo digital). Las lluvias de febrero y marzo no distinguen esos años "
     "(2024 y 2026 fueron lluviosos; 2023, muy seco), y el primer pico del motor PREDWEEM adelanta el inicio (05/03/2026). "
-    "Por eso en Pergamino: (1) el reloj térmico y la ventana de control se calculan solo desde la fecha de primeras "
+    "Por eso en Pergamino: (1) el reloj térmico y la ventana del graminicida de barbecho se calculan solo desde la fecha de primeras "
     "plántulas informada (o el primer conteo con plántulas); (2) mientras no se informen plántulas, la alerta llega como "
     "máximo a *Atención* («recorrer el lote para detectar el inicio»); (3) las semanas que un conteo posterior en cero "
     "(sin plántulas previas) confirma sin emergencia quedan en 0 %, y la curva acumulada arranca después "
@@ -212,7 +212,7 @@ if isinstance(_resultados_alerta, dict) and _resultados_alerta:
     st.subheader("📥 Descarga de resultados")
     st.caption(
         "Excel con los resultados que muestra la app para la fecha de emisión elegida: resumen (nivel y probabilidad de "
-        "gran flujo, inicio y ventana de control 600–800 °Cd, emergencia acumulada esperada), alerta semanal, emergencia "
+        "gran flujo, inicio y ventana del graminicida de barbecho 600–800 °Cd, emergencia acumulada esperada), alerta semanal, emergencia "
         "acumulada con su rango, tiempo térmico diario desde el inicio, conteos usados, clima, parámetros y validación."
     )
     st.download_button(
