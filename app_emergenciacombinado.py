@@ -13,7 +13,7 @@ La aplicación científica se conserva en ``app_emergenciacombinado_core.py``. A
   por defecto: termoinhibición 26 °C), sus avisos, el calibrador 2D y el botón del reporte del motor; la barra lateral
   conserva los parámetros de la ventana de control.
 
-La alerta (``alerta_lolmu.py``) es la calibrada con 17 campañas de Bordenave, validada con Pergamino 2024 y 2026.
+La alerta (``alerta_lolmu.py``) es la del paquete lolium-comun, validada con Pergamino 2024 y 2026.
 En Pergamino el inicio de la emergencia es tardío y variable (fines de febrero en 2024; abril en 2026; mayo en 2023)
 y el primer pico del motor lo adelanta (05/03/2026, cuando no hubo emergencia hasta abril). Por eso, a diferencia de
 las otras localidades, el reloj térmico y la ventana de control **no** se anclan al primer pico del motor: se
@@ -146,7 +146,7 @@ NOTA_PERGAMINO = (
     "sin gran flujo (7 de ellos en febrero–marzo de 2026); con el tope, 2 de 19, y los 11 grandes flujos quedan en *Atención* o "
     "*Alerta* (7 en *Alerta*: los primeros de cada año quedan en *Atención* porque todavía no había plántulas informadas). "
     "Con las mismas semanas, la red neuronal del gemelo dio AUC 0,66.\n\n"
-    "**Curva acumulada.** Es la de Bordenave, como referencia regional (error de 8 puntos en 2024 y 27 en 2026). Un "
+    "**Curva acumulada.** Es el calendario de referencia regional (error de 8 puntos en 2024 y 27 en 2026). Un "
     "calendario propio armado con las otras campañas de Pergamino empeoró la alerta, porque los años difieren mucho.\n\n"
     "**Límites.** Dos campañas evaluables; 2023 y 2024 son curvas relativas digitalizadas de boletines de la Red DIMA "
     "(quincenales); el clima SIGA de 2023 tiene huecos en abril–agosto y no permite evaluarla."
